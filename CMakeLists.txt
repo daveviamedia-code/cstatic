@@ -1,0 +1,150 @@
+cmake_minimum_required(VERSION 3.16)
+project(cstatic VERSION 0.2.0 LANGUAGES CXX)
+
+# Policy override for dependency compatibility (yaml-cpp requires older CMake minimum)
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE INTERNAL "")
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# --- Dependencies via FetchContent ---
+include(FetchContent)
+
+# CLI11 — CLI argument parsing
+FetchContent_Declare(
+    cli11
+    GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
+    GIT_TAG        v2.4.2
+)
+
+# toml++ — TOML config parsing (header-only)
+FetchContent_Declare(
+    tomlplusplus
+    GIT_REPOSITORY https://github.com/marzer/tomlplusplus.git
+    GIT_TAG        v3.4.0
+)
+
+# yaml-cpp — YAML frontmatter parsing
+FetchContent_Declare(
+    yaml-cpp
+    GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
+    GIT_TAG        0.8.0
+)
+
+# cmark — Markdown to HTML (C library)
+FetchContent_Declare(
+    cmark
+    GIT_REPOSITORY https://github.com/commonmark/cmark.git
+    GIT_TAG        0.30.3
+)
+
+# inja — Template engine (header-only)
+# Brings its own embedded nlohmann/json — no separate FetchContent needed
+FetchContent_Declare(
+    inja
+    GIT_REPOSITORY https://github.com/pantor/inja.git
+    GIT_TAG        v3.4.0
+)
+
+# xxHash — fast non-cryptographic hashing
+FetchContent_Declare(
+    xxhash
+    GIT_REPOSITORY https://github.com/Cyan4973/xxHash.git
+    GIT_TAG        v0.8.2
+    SOURCE_SUBDIR  cmake_unofficial
+)
+
+# cpp-httplib — HTTP server for dev serve command (header-only)
+FetchContent_Declare(
+    cpp-httplib
+    GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
+    GIT_TAG        v0.15.3
+)
+
+# --- Dependency options (set before MakeAvailable) ---
+# Disable tests in dependencies (not our own tests)
+set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(INJA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(INJA_BUILD_BENCHMARK OFF CACHE BOOL "" FORCE)
+set(CMARK_TESTS OFF CACHE BOOL "" FORCE)
+
+FetchContent_MakeAvailable(cli11 tomlplusplus yaml-cpp cmark inja xxhash cpp-httplib)
+
+# --- Main executable ---
+add_executable(cstatic
+    src/main.cpp
+    src/assets/asset_pipeline.cpp
+    src/config/config.cpp
+    src/content/frontmatter.cpp
+    src/content/markdown.cpp
+    src/data/data_loader.cpp
+    src/hash/hash_store.cpp
+    src/modules/sitemap.cpp
+    src/modules/rss.cpp
+    src/modules/robots.cpp
+    src/server/dev_server.cpp
+    src/template/renderer.cpp
+    src/pipeline/builder.cpp
+    src/utils/path.cpp
+)
+
+target_include_directories(cstatic PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(cstatic PRIVATE
+    CLI11::CLI11
+    tomlplusplus::tomlplusplus
+    yaml-cpp::yaml-cpp
+    cmark::cmark_static
+    inja                 # inja creates target 'inja' (alias: pantor::inja)
+    nlohmann_json        # provided by inja's embedded copy
+    xxHash::xxhash
+    httplib::httplib
+)
+
+# Embed version from CMake into binary
+target_compile_definitions(cstatic PRIVATE
+    CSTATIC_VERSION="${PROJECT_VERSION}"
+)
+
+# --- Release optimizations ---
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    target_compile_options(cstatic PRIVATE -O2)
+    if(APPLE)
+        set_target_properties(cstatic PROPERTIES
+            MACOSX_RPATH ON
+        )
+    endif()
+    # Strip debug symbols for release
+    if(NOT WIN32)
+        target_compile_options(cstatic PRIVATE -DNDEBUG)
+        set_target_properties(cstatic PROPERTIES
+            LINK_FLAGS "-s"
+        )
+    endif()
+endif()
+
+# --- Static linking on Linux ---
+if(UNIX AND NOT APPLE)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libgcc -static-libstdc++")
+endif()
+
+# --- Install target ---
+include(GNUInstallDirs)
+install(TARGETS cstatic
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/src/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cstatic
+    FILES_MATCHING PATTERN "*.hpp"
+)
+
+# --- Tests (only when CSTATIC_BUILD_TESTS is ON) ---
+option(CSTATIC_BUILD_TESTS "Build C-Static test suite" OFF)
+if(CSTATIC_BUILD_TESTS)
+    enable_testing()
+    set(BUILD_TESTING ON)
+    add_subdirectory(tests)
+endif()

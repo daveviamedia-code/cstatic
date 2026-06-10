@@ -1,0 +1,60 @@
+include(FetchContent)
+
+# Catch2 v3.5.0
+FetchContent_Declare(
+    Catch2
+    GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+    GIT_TAG        v3.5.0
+)
+FetchContent_MakeAvailable(Catch2)
+
+# Library source files (everything except main.cpp)
+set(LIB_SOURCES
+    ${CMAKE_SOURCE_DIR}/src/assets/asset_pipeline.cpp
+    ${CMAKE_SOURCE_DIR}/src/config/config.cpp
+    ${CMAKE_SOURCE_DIR}/src/content/frontmatter.cpp
+    ${CMAKE_SOURCE_DIR}/src/content/markdown.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/data_loader.cpp
+    ${CMAKE_SOURCE_DIR}/src/hash/hash_store.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/sitemap.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/rss.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/robots.cpp
+    ${CMAKE_SOURCE_DIR}/src/template/renderer.cpp
+    ${CMAKE_SOURCE_DIR}/src/pipeline/builder.cpp
+    ${CMAKE_SOURCE_DIR}/src/utils/path.cpp
+)
+
+# Test source files
+set(TEST_SOURCES
+    ${CMAKE_SOURCE_DIR}/tests/test_config.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_frontmatter.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_markdown.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_path_utils.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_hash_store.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_template_renderer.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_minifier.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_data_loader.cpp
+)
+
+add_executable(cstatic_tests ${TEST_SOURCES} ${LIB_SOURCES})
+
+target_include_directories(cstatic_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(cstatic_tests PRIVATE
+    Catch2::Catch2WithMain
+    CLI11::CLI11
+    tomlplusplus::tomlplusplus
+    yaml-cpp::yaml-cpp
+    cmark::cmark_static
+    inja
+    nlohmann_json
+    xxHash::xxhash
+    httplib::httplib
+)
+
+# Register tests with CTest
+include(CTest)
+include(Catch)
+catch_discover_tests(cstatic_tests)

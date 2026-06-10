@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="{{ site.language }}">
+<head>
+    <meta charset="utf-8">
+    <title>Products — {{ site.title }}</title>
+</head>
+<body>
+    <h1>Products</h1>
+
+    <div class="pagination-info">
+        Page {{ pagination.page }} of {{ pagination.total_pages }}
+        ({{ pagination.total_items }} items)
+    </div>
+
+    <ul class="product-list">
+    {% for product in pagination.items %}
+        <li>
+            <a href="/products/{{ product.slug }}/">{{ product.title }}</a>
+            — ${{ product.price }}
+        </li>
+    {% endfor %}
+    </ul>
+
+    <div class="pagination-nav">
+    {% if pagination.prev_url != "" %}
+        <a href="{{ pagination.prev_url }}">Previous</a>
+    {% endif %}
+    {% if pagination.next_url != "" %}
+        <a href="{{ pagination.next_url }}">Next</a>
+    {% endif %}
+    </div>
+</body>
+</html>

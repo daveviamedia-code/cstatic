@@ -1,0 +1,2 @@
+This is a non-minifiable static file.
+It should be copied as-is.

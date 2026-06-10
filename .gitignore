@@ -1,0 +1,47 @@
+# Build
+build/
+build_test/
+cmake-build-*/
+out/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# CStatic build output
+.cstatic_cache/
+output/
+
+# Compiled
+*.o
+*.obj
+*.exe
+
+# Test artifacts
+test_hashes.json
+test_hashes.json.tmp
+test_hash_input.txt
+test_roundtrip.txt
+test_unchanged.txt
+test_new_file.txt
+test_prune.txt
+test_config.toml
+test_data/
+test_templates/
+
+# Claude / planning
+.claude/
+.planning/
+.cache/
+
+# Internal planning docs (not for distribution)
+prd.md
+IMPLEMENTATION_PLAN.md
+*.bak

@@ -1,0 +1,38 @@
+[
+  {
+    "slug": "widget-pro",
+    "title": "Widget Pro",
+    "price": 29.99,
+    "description": "The professional-grade widget.",
+    "category": "widgets"
+  },
+  {
+    "slug": "gadget-plus",
+    "title": "Gadget Plus",
+    "price": 49.99,
+    "description": "Our best gadget yet.",
+    "category": "gadgets"
+  },
+  {
+    "slug": "thingamajig",
+    "title": "Thingamajig",
+    "price": 14.99,
+    "description": "A versatile thingamajig.",
+    "category": "widgets"
+  },
+  {
+    "slug": "doohickey-deluxe",
+    "title": "Doohickey Deluxe",
+    "price": 99.99,
+    "description": "Premium doohickey for professionals.",
+    "category": "gadgets"
+  },
+  {
+    "slug": "whatchamacallit",
+    "title": "Whatchamacallit",
+    "price": 39.99,
+    "description": "What even is this thing?",
+    "category": "misc"
+  }
+]
+

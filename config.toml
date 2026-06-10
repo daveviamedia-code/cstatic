@@ -1,0 +1,49 @@
+# C-Static test config
+
+[site]
+title = "My Awesome Site"
+base_url = "https://example.com"
+language = "en"
+
+[build]
+source_dir = "src"
+output_dir = "output"
+template_dir = "templates"
+static_dir = "static"
+
+[build.incremental]
+enabled = true
+hash_file = ".cstatic_cache/hashes.json"
+
+[build.minify]
+css = true
+js = true
+
+[data]
+data_dir = "_data"
+
+# Product listing pages — paginated with 2 per page
+[[data_source]]
+file = "products.json"
+template = "products"
+url_pattern = "/products/{{ slug }}/"
+per_page = 2
+
+# Individual product detail pages
+[[data_source]]
+file = "products.json"
+template = "product"
+url_pattern = "/products/{{ slug }}/"
+per_item = true
+
+[modules]
+sitemap = true
+rss = true
+robots = true
+robots_user_agent = "*"
+robots_disallow = ["/private/*"]
+robots_include_sitemap = true
+
+[sitemap]
+exclude = ["/drafts/*", "/private/*"]
+

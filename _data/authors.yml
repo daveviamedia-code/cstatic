@@ -1,0 +1,11 @@
+- name: Alice
+  bio: "Senior developer and coffee enthusiast"
+  slug: alice
+
+- name: Bob
+  bio: "Designer by day, coder by night"
+  slug: bob
+
+- name: Charlie
+  bio: "DevOps wizard and cat person"
+  slug: charlie

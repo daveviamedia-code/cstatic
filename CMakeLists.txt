@@ -69,6 +69,10 @@ set(INJA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(INJA_BUILD_BENCHMARK OFF CACHE BOOL "" FORCE)
 set(CMARK_TESTS OFF CACHE BOOL "" FORCE)
 
+# cpp-httplib — we only use it for local dev server, no HTTPS needed
+set(HTTPLIB_REQUIRE_OPENSSL OFF CACHE BOOL "" FORCE)
+set(HTTPLIB_REQUIRE_ZLIB OFF CACHE BOOL "" FORCE)
+
 FetchContent_MakeAvailable(cli11 tomlplusplus yaml-cpp cmark inja xxhash cpp-httplib)
 
 # --- Main executable ---
@@ -86,6 +90,7 @@ add_executable(cstatic
     src/server/dev_server.cpp
     src/template/renderer.cpp
     src/pipeline/builder.cpp
+    src/utils/file_io.cpp
     src/utils/path.cpp
 )
 
@@ -129,6 +134,21 @@ endif()
 # --- Static linking on Linux ---
 if(UNIX AND NOT APPLE)
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libgcc -static-libstdc++")
+endif()
+
+# --- Fully static binary option ---
+option(CSTATIC_STATIC "Build fully static binary" OFF)
+if(CSTATIC_STATIC)
+    if(UNIX AND NOT APPLE)
+        # Linux: full static linking including libc
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
+        set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
+        target_compile_options(cstatic PRIVATE -static)
+    elseif(WIN32)
+        # Windows (MSVC): link static CRT (/MT) so no VC++ Redistributable needed
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
+    endif()
+    # macOS: no effect — Apple does not support fully static executables
 endif()
 
 # --- Install target ---

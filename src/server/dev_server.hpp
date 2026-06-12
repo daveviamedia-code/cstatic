@@ -15,7 +15,7 @@ namespace cstatic {
 // via Server-Sent Events (SSE).
 class DevServer {
 public:
-    explicit DevServer(const Config& cfg, int port = 3000);
+    explicit DevServer(const Config& cfg, int port = 3000, bool include_drafts = false);
     ~DevServer();
 
     // Start the server (blocking). Returns on stop() or fatal error.
@@ -28,7 +28,7 @@ private:
     // Trigger an incremental rebuild and notify connected browsers.
     void rebuild_and_reload();
 
-    // --- File watching (kqueue on macOS) ---
+    // --- File watching (platform-specific) ---
     void watch_loop();
 
     // --- SSE live reload ---
@@ -37,6 +37,7 @@ private:
 
     Config cfg_;
     int port_;
+    bool include_drafts_;
     std::atomic<bool> running_{false};
 
     // SSE client count (for display purposes)

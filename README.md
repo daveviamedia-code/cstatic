@@ -189,7 +189,7 @@ Place data files in `_data/`:
 | Module    | Config key         | Output                |
 |----------|--------------------|-----------------------|
 | Sitemap  | `modules.sitemap`  | `/sitemap.xml`        |
-| RSS      | `modules.rss`      | `/rss.xml`            |
+| RSS      | `modules.rss`      | `/feed.xml`           |
 | Robots   | `modules.robots`   | `/robots.txt`         |
 | 404      | Automatic          | `/404.html`           |
 

@@ -7,6 +7,47 @@
 
 namespace cstatic {
 
+// Convert a YAML node to nlohmann::json with type inference.
+static nlohmann::json yaml_node_to_json(const YAML::Node& n) {
+    switch (n.Type()) {
+        case YAML::NodeType::Null:
+            return nullptr;
+        case YAML::NodeType::Scalar: {
+            // Type-infer bool/int/float/string
+            std::string val = n.as<std::string>();
+            if (val == "true" || val == "True" || val == "TRUE") return true;
+            if (val == "false" || val == "False" || val == "FALSE") return false;
+            try {
+                size_t pos;
+                auto iv = std::stoll(val, &pos);
+                if (pos == val.size()) return iv;
+            } catch (...) {}
+            try {
+                size_t pos;
+                auto dv = std::stod(val, &pos);
+                if (pos == val.size()) return dv;
+            } catch (...) {}
+            return val;
+        }
+        case YAML::NodeType::Sequence: {
+            nlohmann::json arr = nlohmann::json::array();
+            for (size_t i = 0; i < n.size(); i++) {
+                arr.push_back(yaml_node_to_json(n[i]));
+            }
+            return arr;
+        }
+        case YAML::NodeType::Map: {
+            nlohmann::json obj = nlohmann::json::object();
+            for (auto it = n.begin(); it != n.end(); ++it) {
+                obj[it->first.as<std::string>()] = yaml_node_to_json(it->second);
+            }
+            return obj;
+        }
+        default:
+            return nullptr;
+    }
+}
+
 ParsedContent parse_frontmatter(const std::string& content, const std::string& filename) {
     ParsedContent result;
 
@@ -84,8 +125,8 @@ ParsedContent parse_frontmatter(const std::string& content, const std::string& f
         for (auto k : known_keys) {
             if (key == k) { is_known = true; break; }
         }
-        if (!is_known && it->second.IsScalar()) {
-            result.frontmatter.custom[key] = it->second.as<std::string>();
+        if (!is_known) {
+            result.frontmatter.custom[key] = yaml_node_to_json(it->second);
         }
     }
 

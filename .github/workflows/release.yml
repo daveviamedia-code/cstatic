@@ -1,0 +1,84 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            cmake_extra: ""
+            artifact: cstatic-macos-arm64
+          - os: ubuntu-latest
+            cmake_extra: "-DCSTATIC_STATIC=ON"
+            artifact: cstatic-linux-x86_64
+          - os: windows-latest
+            cmake_extra: "-DCSTATIC_STATIC=ON"
+            artifact: cstatic-windows-x86_64.exe
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: >
+          cmake -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -DCSTATIC_BUILD_TESTS=ON
+          ${{ matrix.cmake_extra }}
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Test
+        working-directory: build
+        run: ctest --output-on-failure -C Release
+
+      - name: Prepare artifact (non-Windows)
+        if: runner.os != 'Windows'
+        run: |
+          cp build/cstatic "${{ matrix.artifact }}"
+          strip "${{ matrix.artifact }}"
+
+      - name: Prepare artifact (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          copy build\Release\cstatic.exe "${{ matrix.artifact }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "C-Static ${{ github.ref_name }}"
+          body: |
+            ## C-Static ${{ github.ref_name }}
+
+            See [README](https://github.com/daveviamedia/c-static#readme) for usage instructions.
+
+            **Binaries:**
+            - `cstatic-macos-arm64` — macOS (Apple Silicon)
+            - `cstatic-linux-x86_64` — Linux (x86_64, fully static)
+            - `cstatic-windows-x86_64.exe` — Windows (x86_64)
+          files: artifacts/**/*

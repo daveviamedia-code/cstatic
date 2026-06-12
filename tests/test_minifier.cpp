@@ -93,3 +93,55 @@ TEST_CASE("Minifier: JS string with escape sequences", "[minifier]") {
     std::string result = minify_js(js);
     REQUIRE(result.find("\\\"world\\\"") != std::string::npos);
 }
+
+// --- JS Regex Literal Tests ---
+
+TEST_CASE("Minifier: JS basic regex preserved", "[minifier]") {
+    std::string js = "var r = /pattern/g;";
+    std::string result = minify_js(js);
+    REQUIRE(result.find("/pattern/g") != std::string::npos);
+}
+
+TEST_CASE("Minifier: JS regex with escape", "[minifier]") {
+    std::string js = "var r = /\\/path\\//g;";
+    std::string result = minify_js(js);
+    REQUIRE(result.find("/\\/path\\//g") != std::string::npos);
+}
+
+TEST_CASE("Minifier: JS regex in condition", "[minifier]") {
+    std::string js = "if (/test/.test(str)) { }";
+    std::string result = minify_js(js);
+    REQUIRE(result.find("/test/") != std::string::npos);
+}
+
+TEST_CASE("Minifier: JS division not confused with regex", "[minifier]") {
+    std::string js = "var x = 10 / 2;";
+    std::string result = minify_js(js);
+    REQUIRE(result.find("10/2") != std::string::npos);
+    REQUIRE(result.find("//") == std::string::npos); // should not look like a comment
+}
+
+TEST_CASE("Minifier: JS regex after return", "[minifier]") {
+    std::string js = "return /pattern/;";
+    std::string result = minify_js(js);
+    REQUIRE(result.find("/pattern/") != std::string::npos);
+}
+
+TEST_CASE("Minifier: JS regex after typeof", "[minifier]") {
+    std::string js = "typeof /pattern/";
+    std::string result = minify_js(js);
+    REQUIRE(result.find("/pattern/") != std::string::npos);
+}
+
+TEST_CASE("Minifier: JS regex in array", "[minifier]") {
+    std::string js = "var a = [/abc/, /def/];";
+    std::string result = minify_js(js);
+    REQUIRE(result.find("/abc/") != std::string::npos);
+    REQUIRE(result.find("/def/") != std::string::npos);
+}
+
+TEST_CASE("Minifier: JS chained division stays as division", "[minifier]") {
+    std::string js = "var x = a / b / c;";
+    std::string result = minify_js(js);
+    REQUIRE(result.find("a/b/c") != std::string::npos);
+}

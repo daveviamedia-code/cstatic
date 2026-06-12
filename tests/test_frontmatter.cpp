@@ -62,10 +62,57 @@ TEST_CASE("Frontmatter: custom fields", "[frontmatter]") {
                           "Content.";
     auto result = parse_frontmatter(content, "test.md");
     REQUIRE(result.frontmatter.title == "Custom");
-    REQUIRE(result.frontmatter.custom.count("author") == 1);
+    REQUIRE(result.frontmatter.custom.contains("author"));
     REQUIRE(result.frontmatter.custom["author"] == "Jane");
-    REQUIRE(result.frontmatter.custom.count("category") == 1);
+    REQUIRE(result.frontmatter.custom.contains("category"));
     REQUIRE(result.frontmatter.custom["category"] == "tech");
+}
+
+TEST_CASE("Frontmatter: array custom field", "[frontmatter]") {
+    std::string content = "---\n"
+                          "title: Array Test\n"
+                          "authors:\n"
+                          "  - Alice\n"
+                          "  - Bob\n"
+                          "---\n"
+                          "Content.";
+    auto result = parse_frontmatter(content, "test.md");
+    REQUIRE(result.frontmatter.custom.contains("authors"));
+    REQUIRE(result.frontmatter.custom["authors"].is_array());
+    REQUIRE(result.frontmatter.custom["authors"].size() == 2);
+    REQUIRE(result.frontmatter.custom["authors"][0] == "Alice");
+    REQUIRE(result.frontmatter.custom["authors"][1] == "Bob");
+}
+
+TEST_CASE("Frontmatter: nested map custom field", "[frontmatter]") {
+    std::string content = "---\n"
+                          "title: Map Test\n"
+                          "meta:\n"
+                          "  key1: val1\n"
+                          "  key2: val2\n"
+                          "---\n"
+                          "Content.";
+    auto result = parse_frontmatter(content, "test.md");
+    REQUIRE(result.frontmatter.custom.contains("meta"));
+    REQUIRE(result.frontmatter.custom["meta"].is_object());
+    REQUIRE(result.frontmatter.custom["meta"]["key1"] == "val1");
+    REQUIRE(result.frontmatter.custom["meta"]["key2"] == "val2");
+}
+
+TEST_CASE("Frontmatter: type preservation in custom fields", "[frontmatter]") {
+    std::string content = "---\n"
+                          "title: Types\n"
+                          "count: 42\n"
+                          "active: true\n"
+                          "score: 3.14\n"
+                          "---\n"
+                          "Content.";
+    auto result = parse_frontmatter(content, "test.md");
+    REQUIRE(result.frontmatter.custom["count"].is_number_integer());
+    REQUIRE(result.frontmatter.custom["count"].get<int>() == 42);
+    REQUIRE(result.frontmatter.custom["active"].is_boolean());
+    REQUIRE(result.frontmatter.custom["active"].get<bool>() == true);
+    REQUIRE(result.frontmatter.custom["score"].is_number_float());
 }
 
 TEST_CASE("Frontmatter: only title", "[frontmatter]") {

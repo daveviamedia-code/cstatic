@@ -2,45 +2,16 @@
 #include "hash/hash_store.hpp"
 #include "utils/path.hpp"
 #include "utils/terminal.hpp"
+#include "utils/file_io.hpp"
 
 #include <filesystem>
-#include <fstream>
 #include <iostream>
-#include <sstream>
 #include <algorithm>
 #include <unordered_set>
 
 namespace cstatic {
 
 namespace fs = std::filesystem;
-
-// --- File I/O helpers ---
-
-static std::string read_file_binary(const std::string& path) {
-    std::ifstream f(path, std::ios::binary);
-    if (!f.is_open()) {
-        throw std::runtime_error(
-            std::string(utils::error_label()) + " cannot read asset: " + path +
-            " — file does not exist or is unreadable");
-    }
-    std::ostringstream ss;
-    ss << f.rdbuf();
-    return ss.str();
-}
-
-static void write_file_binary(const std::string& path, const std::string& content) {
-    std::string dir = utils::parent_dir(path);
-    if (!dir.empty() && !fs::exists(dir)) {
-        fs::create_directories(dir);
-    }
-    std::ofstream f(path, std::ios::binary);
-    if (!f.is_open()) {
-        throw std::runtime_error(
-            std::string(utils::error_label()) + " cannot write asset: " + path +
-            " — check that the output directory is writable");
-    }
-    f << content;
-}
 
 // Copy file preserving permissions.
 static void copy_file(const std::string& src, const std::string& dst) {
@@ -157,84 +128,174 @@ std::string minify_css(const std::string& input) {
 
 // --- JS Minification ---
 
+// Check if '/' at position i starts a regex literal by examining preceding output.
+static bool starts_regex(const std::string& out) {
+    // Walk backwards past whitespace to find the last meaningful token
+    int pos = static_cast<int>(out.size()) - 1;
+    while (pos >= 0 && (out[pos] == ' ' || out[pos] == '\t' ||
+                        out[pos] == '\n' || out[pos] == '\r')) {
+        pos--;
+    }
+    if (pos < 0) return true; // start of input → regex
+
+    char last = out[pos];
+
+    // After these characters, '/' starts a regex
+    if (last == '=' || last == '(' || last == '[' || last == ',' ||
+        last == ';' || last == '{' || last == '}' || last == '!' ||
+        last == '&' || last == '|' || last == '^' || last == '~' ||
+        last == '+' || last == '-' || last == '*' || last == '%' ||
+        last == '<' || last == '>' || last == '?' || last == ':') {
+        return true;
+    }
+
+    // After these keywords, '/' starts a regex
+    static const char* keywords[] = {
+        "return", "typeof", "void", "delete", "throw", "new", "in", "case"
+    };
+    for (const char* kw : keywords) {
+        size_t kw_len = strlen(kw);
+        if (pos >= static_cast<int>(kw_len) - 1) {
+            size_t start = pos - kw_len + 1;
+            bool match = true;
+            for (size_t k = 0; k < kw_len; k++) {
+                if (out[start + k] != kw[k]) { match = false; break; }
+            }
+            // Keyword must be preceded by non-identifier char or be at start
+            if (match) {
+                if (start == 0) return true;
+                char before = out[start - 1];
+                if (!std::isalnum(static_cast<unsigned char>(before)) &&
+                    before != '_' && before != '$') {
+                    return true;
+                }
+            }
+        }
+    }
+
+    return false; // otherwise, division
+}
+
 std::string minify_js(const std::string& input) {
     if (input.empty()) return input;
+
+    enum State { NORMAL, STRING, COMMENT_LINE, COMMENT_BLOCK, REGEX };
 
     std::string out;
     out.reserve(input.size());
 
     size_t i = 0;
     size_t len = input.size();
+    State state = NORMAL;
+    char quote_char = '\0';
 
     while (i < len) {
-        // Single-line string literals — pass through verbatim
-        if (input[i] == '\'' || input[i] == '"' || input[i] == '`') {
-            char quote = input[i];
-            out += input[i];
-            i++;
-            while (i < len && input[i] != quote) {
-                if (input[i] == '\\' && i + 1 < len) {
-                    out += input[i];
-                    i++;
-                    out += input[i];
-                    i++;
-                    continue;
-                }
+        switch (state) {
+        case NORMAL:
+            // String literals
+            if (input[i] == '\'' || input[i] == '"' || input[i] == '`') {
+                quote_char = input[i];
                 out += input[i];
                 i++;
+                state = STRING;
+                continue;
             }
-            if (i < len) {
-                out += input[i]; // closing quote
-                i++;
+            // Block comment
+            if (i + 1 < len && input[i] == '/' && input[i + 1] == '*') {
+                i += 2;
+                state = COMMENT_BLOCK;
+                continue;
             }
-            continue;
-        }
-
-        // Block comment: /* ... */
-        if (i + 1 < len && input[i] == '/' && input[i + 1] == '*') {
-            i += 2;
-            while (i + 1 < len && !(input[i] == '*' && input[i + 1] == '/')) {
-                i++;
-            }
-            i += 2; // skip */
-            continue;
-        }
-
-        // Single-line comment: // ...
-        if (i + 1 < len && input[i] == '/' && input[i + 1] == '/') {
-            // Skip until end of line
-            while (i < len && input[i] != '\n') {
-                i++;
-            }
-            continue;
-        }
-
-        // Collapse whitespace
-        if (input[i] == ' ' || input[i] == '\t' || input[i] == '\n' || input[i] == '\r') {
-            // Track if we crossed a newline (might need semicolon insertion)
-            bool had_newline = false;
-            while (i < len && (input[i] == ' ' || input[i] == '\t' ||
-                               input[i] == '\n' || input[i] == '\r')) {
-                if (input[i] == '\n' || input[i] == '\r') had_newline = true;
-                i++;
-            }
-            if (i < len && !out.empty()) {
-                char last = out.back();
-                char next = input[i];
-                // Keep space between identifiers/keywords
-                bool need_space = (std::isalnum(static_cast<unsigned char>(last)) ||
-                                   last == '_' || last == '$') &&
-                                  (std::isalnum(static_cast<unsigned char>(next)) ||
-                                   next == '_' || next == '$');
-                if (need_space) {
-                    out += ' ';
+            // Regex vs division vs line comment
+            if (input[i] == '/') {
+                if (i + 1 < len && input[i + 1] == '/') {
+                    i += 2;
+                    state = COMMENT_LINE;
+                    continue;
                 }
+                if (starts_regex(out)) {
+                    // Regex literal: copy until unescaped /
+                    out += input[i]; // opening /
+                    i++;
+                    state = REGEX;
+                    continue;
+                }
+                // Division operator — fall through to default
             }
-            continue;
-        }
+            // Whitespace
+            if (input[i] == ' ' || input[i] == '\t' || input[i] == '\n' || input[i] == '\r') {
+                while (i < len && (input[i] == ' ' || input[i] == '\t' ||
+                                   input[i] == '\n' || input[i] == '\r')) {
+                    i++;
+                }
+                if (i < len && !out.empty()) {
+                    char last = out.back();
+                    char next = input[i];
+                    bool need_space = (std::isalnum(static_cast<unsigned char>(last)) ||
+                                       last == '_' || last == '$') &&
+                                      (std::isalnum(static_cast<unsigned char>(next)) ||
+                                       next == '_' || next == '$');
+                    if (need_space) {
+                        out += ' ';
+                    }
+                }
+                continue;
+            }
+            out += input[i];
+            i++;
+            break;
 
-        out += input[i];
-        i++;
+        case STRING:
+            out += input[i];
+            if (input[i] == '\\' && i + 1 < len) {
+                i++;
+                out += input[i];
+                i++;
+                continue;
+            }
+            if (input[i] == quote_char) {
+                state = NORMAL;
+            }
+            i++;
+            break;
+
+        case COMMENT_LINE:
+            if (input[i] == '\n') {
+                state = NORMAL;
+            }
+            i++;
+            break;
+
+        case COMMENT_BLOCK:
+            if (i + 1 < len && input[i] == '*' && input[i + 1] == '/') {
+                i += 2;
+                state = NORMAL;
+                continue;
+            }
+            i++;
+            break;
+
+        case REGEX:
+            out += input[i];
+            if (input[i] == '\\' && i + 1 < len) {
+                i++;
+                out += input[i];
+                i++;
+                continue;
+            }
+            if (input[i] == '/') {
+                // Copy regex flags
+                i++;
+                while (i < len && std::isalpha(static_cast<unsigned char>(input[i]))) {
+                    out += input[i];
+                    i++;
+                }
+                state = NORMAL;
+                continue;
+            }
+            i++;
+            break;
+        }
     }
 
     return out;
@@ -295,16 +356,16 @@ AssetResult process_assets(const Config& cfg, HashStore& hashes,
         std::string ext = get_extension(src_path);
 
         if (ext == ".css" && cfg.minify_css) {
-            std::string content = read_file_binary(src_path);
+            std::string content = utils::read_file_binary(src_path);
             std::string minified = minify_css(content);
-            write_file_binary(dst_path, minified);
+            utils::write_file_binary(dst_path, minified);
             int saved = static_cast<int>(content.size()) - static_cast<int>(minified.size());
             if (saved > 0) result.bytes_saved += saved;
             result.files_minified++;
         } else if (ext == ".js" && cfg.minify_js) {
-            std::string content = read_file_binary(src_path);
+            std::string content = utils::read_file_binary(src_path);
             std::string minified = minify_js(content);
-            write_file_binary(dst_path, minified);
+            utils::write_file_binary(dst_path, minified);
             int saved = static_cast<int>(content.size()) - static_cast<int>(minified.size());
             if (saved > 0) result.bytes_saved += saved;
             result.files_minified++;

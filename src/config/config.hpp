@@ -63,6 +63,14 @@ struct Config {
         bool per_item = false;      // generate individual pages per item
     };
     std::vector<DataSource> data_sources;
+
+    // [[pagination]] — array of tables for markdown page pagination
+    struct PaginationRule {
+        std::string source;      // "posts" — match pages under src/posts/
+        int per_page = 10;       // items per paginated page
+        std::string template_;   // "posts" — template for paginated index
+    };
+    std::vector<PaginationRule> pagination_rules;
 };
 
 // Load and validate config from the given TOML file path.

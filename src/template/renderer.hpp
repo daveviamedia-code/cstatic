@@ -4,7 +4,9 @@
 #include <string>
 #include <map>
 #include <vector>
+#include <unordered_map>
 #include <nlohmann/json.hpp>
+#include <inja/inja.hpp>
 
 namespace cstatic {
 
@@ -28,8 +30,13 @@ public:
     // The template_data JSON object is passed as the inja context.
     std::string render(const std::string& layout, const nlohmann::json& data) const;
 
+    // Preload a template into the cache.
+    void preload_template(const std::string& name) const;
+
 private:
     std::string template_dir_;
+    mutable inja::Environment env_;
+    mutable std::unordered_map<std::string, std::string> template_cache_;
 
     // Load a template file. Returns empty string if not found.
     std::string load_template(const std::string& name) const;

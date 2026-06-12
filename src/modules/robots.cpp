@@ -1,29 +1,11 @@
 #include "modules/robots.hpp"
 #include "config/config.hpp"
+#include "utils/file_io.hpp"
 
-#include <filesystem>
-#include <fstream>
 #include <sstream>
 
 namespace cstatic {
 namespace modules {
-
-namespace {
-
-void write_file(const std::string& path, const std::string& content) {
-    namespace fs = std::filesystem;
-    auto dir = fs::path(path).parent_path();
-    if (!dir.empty() && !fs::exists(dir)) {
-        fs::create_directories(dir);
-    }
-    std::ofstream f(path);
-    if (!f.is_open()) {
-        throw std::runtime_error("cannot write file: " + path);
-    }
-    f << content;
-}
-
-} // anonymous namespace
 
 void generate_robots(const Config& cfg, const std::string& output_dir) {
     std::ostringstream txt;
@@ -41,7 +23,7 @@ void generate_robots(const Config& cfg, const std::string& output_dir) {
     txt << "\n";
 
     std::string path = output_dir + "/robots.txt";
-    write_file(path, txt.str());
+    utils::write_file(path, txt.str());
 }
 
 } // namespace modules

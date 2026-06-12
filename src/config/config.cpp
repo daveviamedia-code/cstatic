@@ -207,6 +207,19 @@ Config load_config(const std::string& path) {
         }
     }
 
+    // --- [[pagination]] ---
+    auto pg_arr = toml::at_path(tbl, "pagination");
+    if (pg_arr.is_array_of_tables()) {
+        for (auto& elem : *pg_arr.as_array()) {
+            auto& pg_tbl = *elem.as_table();
+            Config::PaginationRule pr;
+            pr.source     = require_string(pg_tbl, "source");
+            pr.template_  = require_string(pg_tbl, "template");
+            pr.per_page   = optional_int(pg_tbl, "per_page", 10);
+            cfg.pagination_rules.push_back(std::move(pr));
+        }
+    }
+
     return cfg;
 }
 
@@ -255,6 +268,16 @@ std::string config_to_json(const Config& cfg) {
         sources.push_back(s);
     }
     j["data_sources"] = sources;
+
+    auto rules = nlohmann::json::array();
+    for (const auto& pr : cfg.pagination_rules) {
+        nlohmann::json r;
+        r["source"]    = pr.source;
+        r["template"]  = pr.template_;
+        r["per_page"]  = pr.per_page;
+        rules.push_back(r);
+    }
+    j["pagination"] = rules;
 
     return j.dump(2);
 }

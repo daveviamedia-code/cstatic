@@ -11,8 +11,8 @@ namespace fs = std::filesystem;
 using namespace cstatic::utils;
 
 int cmd_init();
-int cmd_build(bool full_rebuild);
-int cmd_serve(int port);
+int cmd_build(bool full_rebuild, bool include_drafts, int jobs);
+int cmd_serve(int port, bool include_drafts);
 
 int main(int argc, char** argv) {
     CLI::App app{"C-Static — a high-performance static site generator", "cstatic"};
@@ -26,15 +26,21 @@ int main(int argc, char** argv) {
 
     // build subcommand
     bool full_rebuild = false;
+    bool include_drafts = false;
+    int jobs = 0;
     auto* build_cmd = app.add_subcommand("build", "Build the site");
     build_cmd->add_flag("--full", full_rebuild, "Force a clean rebuild (ignore cache)");
-    build_cmd->callback([&full_rebuild]() { std::exit(cmd_build(full_rebuild)); });
+    build_cmd->add_flag("--drafts", include_drafts, "Include draft pages in output");
+    build_cmd->add_option("-j,--jobs", jobs, "Number of parallel render threads (0 = auto)")->default_val(0);
+    build_cmd->callback([&full_rebuild, &include_drafts, &jobs]() { std::exit(cmd_build(full_rebuild, include_drafts, jobs)); });
 
     // serve subcommand
     int port = 3000;
+    bool serve_include_drafts = false;
     auto* serve_cmd = app.add_subcommand("serve", "Start dev server with live reload");
     serve_cmd->add_option("--port", port, "Port to serve on")->default_val(3000);
-    serve_cmd->callback([&port]() { std::exit(cmd_serve(port)); });
+    serve_cmd->add_flag("--drafts", serve_include_drafts, "Include draft pages in output");
+    serve_cmd->callback([&port, &serve_include_drafts]() { std::exit(cmd_serve(port, serve_include_drafts)); });
 
     app.require_subcommand(1);
 
@@ -76,7 +82,7 @@ int cmd_init() {
 
     // config.toml
     const char* config_toml = R"(# C-Static Site Configuration
-# Full docs: https://github.com/your-org/c-static
+# Full docs: https://github.com/daveviamedia-code/cstatic
 
 [site]
 title = "My Site"
@@ -150,7 +156,7 @@ This is the about page. Replace this content with your own.
     {{ page.content }}
   </main>
   <footer>
-    <p>Built with <a href="https://github.com/your-org/c-static">C-Static</a></p>
+    <p>Built with <a href="https://github.com/daveviamedia-code/cstatic">C-Static</a></p>
   </footer>
 </body>
 </html>
@@ -211,11 +217,11 @@ footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; color:
     return 0;
 }
 
-int cmd_build(bool full_rebuild) {
+int cmd_build(bool full_rebuild, bool include_drafts, int jobs) {
     try {
         cstatic::Config cfg = cstatic::load_config("config.toml");
 
-        auto result = cstatic::build_site(cfg, full_rebuild);
+        auto result = cstatic::build_site(cfg, full_rebuild, include_drafts, jobs);
 
         // Build stats in green
         if (result.pages_cached > 0) {
@@ -274,18 +280,18 @@ int cmd_build(bool full_rebuild) {
     }
 }
 
-int cmd_serve(int port) {
+int cmd_serve(int port, bool include_drafts) {
     try {
         cstatic::Config cfg = cstatic::load_config("config.toml");
 
         // Run an initial build before serving
-        auto result = cstatic::build_site(cfg, false);
+        auto result = cstatic::build_site(cfg, false, include_drafts);
         std::cout << colorize(color::green, "Built " + std::to_string(result.pages_built) + " page(s)")
                   << " in " << static_cast<int>(result.elapsed_ms) << "ms\n\n";
 
         std::cout << "  " << colorize(color::cyan, "Local:   http://localhost:" + std::to_string(port)) << "\n\n";
 
-        cstatic::DevServer server(cfg, port);
+        cstatic::DevServer server(cfg, port, include_drafts);
         server.start();
         return 0;
     } catch (const cstatic::ConfigError& e) {

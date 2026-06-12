@@ -11,47 +11,20 @@
 #include "template/renderer.hpp"
 #include "utils/path.hpp"
 #include "utils/terminal.hpp"
+#include "utils/file_io.hpp"
 
 #include <nlohmann/json.hpp>
 #include <chrono>
 #include <filesystem>
-#include <fstream>
 #include <iostream>
 #include <algorithm>
 #include <regex>
+#include <thread>
 #include <unordered_set>
 
 namespace cstatic {
 
 namespace fs = std::filesystem;
-
-// --- File I/O helpers ---
-
-static std::string read_file(const std::string& path) {
-    std::ifstream f(path);
-    if (!f.is_open()) {
-        throw std::runtime_error(
-            std::string(utils::error_label()) + " cannot read file: " + path +
-            " — file does not exist or is unreadable");
-    }
-    std::ostringstream ss;
-    ss << f.rdbuf();
-    return ss.str();
-}
-
-static void write_file(const std::string& path, const std::string& content) {
-    std::string dir = utils::parent_dir(path);
-    if (!dir.empty() && !fs::exists(dir)) {
-        fs::create_directories(dir);
-    }
-    std::ofstream f(path);
-    if (!f.is_open()) {
-        throw std::runtime_error(
-            std::string(utils::error_label()) + " cannot write output file: " + path +
-            " — check that the output directory is writable");
-    }
-    f << content;
-}
 
 // Collect all files with a given extension under a directory recursively.
 static std::vector<std::string> collect_files(const std::string& dir, const std::string& ext) {
@@ -304,7 +277,7 @@ static std::string generate_builtin_404(const Config& cfg) {
 
 // --- Main build pipeline ---
 
-BuildResult build_site(const Config& cfg, bool full_rebuild) {
+BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts, int jobs) {
     auto start = std::chrono::high_resolution_clock::now();
     BuildResult result;
 
@@ -320,7 +293,7 @@ BuildResult build_site(const Config& cfg, bool full_rebuild) {
     // Config file
     std::string config_key = "config:config.toml";
     {
-        std::string config_contents = read_file("config.toml");
+        std::string config_contents = utils::read_file("config.toml");
         hashes.hash_string(config_key, config_contents);
     }
 
@@ -329,7 +302,7 @@ BuildResult build_site(const Config& cfg, bool full_rebuild) {
         incremental = false;
         // Re-initialize without previous hashes to force clean rebuild
         hashes = HashStore(cfg.incremental_hash_file);
-        hashes.hash_string(config_key, read_file("config.toml"));
+        hashes.hash_string(config_key, utils::read_file("config.toml"));
     }
 
     // Source markdown files
@@ -379,10 +352,10 @@ BuildResult build_site(const Config& cfg, bool full_rebuild) {
         RawPage rp;
         rp.source_path = file_path;
 
-        std::string content = read_file(file_path);
+        std::string content = utils::read_file(file_path);
         rp.parsed = parse_frontmatter(content, file_path);
 
-        if (rp.parsed.frontmatter.draft) {
+        if (rp.parsed.frontmatter.draft && !include_drafts) {
             result.pages_skipped++;
             continue;
         }
@@ -436,6 +409,7 @@ BuildResult build_site(const Config& cfg, bool full_rebuild) {
         page_meta["url"] = rp.url;
         page_meta["date"] = rp.parsed.frontmatter.date;
         page_meta["tags"] = tags;
+        page_meta["excerpt"] = utils::truncate_text(utils::strip_html_tags(rp.html_content), 200);
         pages_array.push_back(page_meta);
 
         rp.parsed.frontmatter.title = title;
@@ -447,11 +421,101 @@ BuildResult build_site(const Config& cfg, bool full_rebuild) {
             return a.value("date", "") > b.value("date", "");
         });
 
-    // --- Phase 2: Render markdown pages, track dependencies, decide what to rebuild ---
+    // --- Phase 1.5: Apply markdown pagination rules ---
     std::vector<CachedOutput> all_outputs;
     std::vector<PageRecord> all_records;
+    // For each pagination rule, collect matching pages and generate paginated index pages.
+    {
+        for (const auto& rule : cfg.pagination_rules) {
+            // Find pages matching the source prefix
+            std::string source_prefix = "/" + rule.source + "/";
+            nlohmann::json matching = nlohmann::json::array();
+            for (const auto& p : pages_array) {
+                std::string url = p.value("url", "");
+                if (url.size() >= source_prefix.size() &&
+                    url.substr(0, source_prefix.size()) == source_prefix) {
+                    matching.push_back(p);
+                }
+            }
 
-    for (auto& rp : raw_pages) {
+            if (matching.empty()) continue;
+
+            int total_items = static_cast<int>(matching.size());
+            int per_page = rule.per_page > 0 ? rule.per_page : 10;
+            int total_pages = (total_items + per_page - 1) / per_page;
+            std::string base_url = source_prefix;
+
+            for (int page = 0; page < total_pages; page++) {
+                int start = page * per_page;
+                int end = std::min(start + per_page, total_items);
+
+                nlohmann::json page_items = nlohmann::json::array();
+                for (int i = start; i < end; i++) {
+                    page_items.push_back(matching[i]);
+                }
+
+                nlohmann::json pagination;
+                pagination["page"] = page + 1;
+                pagination["total_pages"] = total_pages;
+                pagination["total_items"] = total_items;
+                pagination["per_page"] = per_page;
+                pagination["items"] = page_items;
+                pagination["prev_url"] = "";
+                pagination["next_url"] = "";
+
+                if (page > 0) {
+                    pagination["prev_url"] = (page == 1) ? base_url
+                        : base_url + "page/" + std::to_string(page) + "/";
+                }
+                if (page < total_pages - 1) {
+                    pagination["next_url"] = base_url + "page/" + std::to_string(page + 2) + "/";
+                }
+
+                std::string page_url = (page == 0) ? base_url
+                    : base_url + "page/" + std::to_string(page + 1) + "/";
+                std::string output_path = utils::url_to_output(page_url, cfg.output_dir);
+
+                // Pre-load the pagination template
+                renderer.preload_template(rule.template_);
+
+                nlohmann::json ctx;
+                ctx["site"] = site_ctx;
+                ctx["pages"] = pages_array;
+                ctx["pagination"] = pagination;
+                ctx["page"] = nlohmann::json::object();
+                ctx["page"]["url"] = page_url;
+                ctx["page"]["title"] = rule.source;
+                ctx["page"]["content"] = "";
+
+                std::string html = renderer.render(rule.template_, ctx);
+
+                CachedOutput out;
+                out.output_path = output_path;
+                out.html = html;
+
+                PageRecord rec;
+                rec.output_path = output_path;
+                rec.url = page_url;
+
+                all_outputs.push_back(std::move(out));
+                all_records.push_back(std::move(rec));
+
+                result.pages_built++;
+            }
+        }
+    }
+
+    // --- Phase 2: Render markdown pages, track dependencies, decide what to rebuild ---
+
+    // Build task list and pre-load templates
+    struct RenderTask {
+        size_t index;
+        bool needs_rebuild;
+    };
+    std::vector<RenderTask> tasks;
+
+    for (size_t i = 0; i < raw_pages.size(); i++) {
+        auto& rp = raw_pages[i];
         // Build dependency list for this page
         std::vector<std::string> deps = {rp.source_path};
         if (!rp.template_path.empty()) {
@@ -470,6 +534,39 @@ BuildResult build_site(const Config& cfg, bool full_rebuild) {
         }
 
         if (needs_rebuild) {
+            renderer.preload_template(rp.parsed.frontmatter.layout);
+        }
+
+        tasks.push_back({i, needs_rebuild});
+    }
+
+    // Determine thread count
+    int thread_count = 1;
+    if (jobs > 0) {
+        thread_count = jobs;
+    } else if (jobs == 0) {
+        unsigned hw = std::thread::hardware_concurrency();
+        thread_count = hw > 0 ? std::min(static_cast<int>(hw), 4) : 1;
+    }
+
+    // Collect tasks that need rendering
+    std::vector<size_t> rebuild_indices;
+    for (size_t i = 0; i < tasks.size(); i++) {
+        if (tasks[i].needs_rebuild) {
+            rebuild_indices.push_back(i);
+        }
+    }
+
+    // Pre-allocate output slots
+    size_t N = rebuild_indices.size();
+    std::vector<std::string> rendered_html(N);
+    std::vector<bool> was_rendered(N, false);
+
+    auto render_task = [&](size_t start, size_t end) {
+        for (size_t ti = start; ti < end; ti++) {
+            size_t page_idx = rebuild_indices[ti];
+            auto& rp = raw_pages[page_idx];
+
             nlohmann::json ctx;
             ctx["page"] = nlohmann::json::object();
             ctx["page"]["title"] = rp.parsed.frontmatter.title;
@@ -482,17 +579,55 @@ BuildResult build_site(const Config& cfg, bool full_rebuild) {
                 tags.push_back(tag);
             }
             ctx["page"]["tags"] = tags;
-            for (const auto& [key, val] : rp.parsed.frontmatter.custom) {
+            for (const auto& [key, val] : rp.parsed.frontmatter.custom.items()) {
                 ctx["page"][key] = val;
+            }
+            if (rp.parsed.frontmatter.draft) {
+                ctx["page"]["draft"] = true;
             }
 
             ctx["site"] = site_ctx;
             ctx["pages"] = pages_array;
             ctx["data"] = all_data;
 
-            std::string html = renderer.render(rp.parsed.frontmatter.layout, ctx);
-            all_outputs.push_back({rp.output_path, html});
-            result.pages_built++;
+            rendered_html[ti] = renderer.render(rp.parsed.frontmatter.layout, ctx);
+            was_rendered[ti] = true;
+        }
+    };
+
+    // Execute rendering
+    if (thread_count > 1 && N > 1) {
+        int actual_threads = std::min(thread_count, static_cast<int>(N));
+        size_t chunk_size = (N + actual_threads - 1) / actual_threads;
+        std::vector<std::thread> threads;
+        for (int t = 0; t < actual_threads; t++) {
+            size_t start = t * chunk_size;
+            size_t end = std::min(start + chunk_size, N);
+            if (start >= end) break;
+            threads.emplace_back(render_task, start, end);
+        }
+        for (auto& th : threads) {
+            th.join();
+        }
+    } else {
+        render_task(0, N);
+    }
+
+    // Single-threaded collection of results
+    size_t render_idx = 0;
+    for (size_t i = 0; i < tasks.size(); i++) {
+        auto& rp = raw_pages[i];
+        std::vector<std::string> deps = {rp.source_path};
+        if (!rp.template_path.empty()) {
+            deps.push_back(rp.template_path);
+        }
+
+        if (tasks[i].needs_rebuild) {
+            if (was_rendered[render_idx]) {
+                all_outputs.push_back({rp.output_path, rendered_html[render_idx]});
+                result.pages_built++;
+            }
+            render_idx++;
         } else {
             result.pages_cached++;
         }
@@ -670,12 +805,12 @@ BuildResult build_site(const Config& cfg, bool full_rebuild) {
         fs::create_directories(cfg.output_dir);
 
         for (const auto& out : all_outputs) {
-            write_file(out.output_path, out.html);
+            utils::write_file(out.output_path, out.html);
         }
     } else {
         // Incremental: only write new/changed outputs
         for (const auto& out : all_outputs) {
-            write_file(out.output_path, out.html);
+            utils::write_file(out.output_path, out.html);
         }
 
         // Remove orphaned HTML outputs (pages whose source was deleted).
@@ -730,7 +865,7 @@ BuildResult build_site(const Config& cfg, bool full_rebuild) {
         }
         if (!has_404) {
             std::string html_404 = generate_builtin_404(cfg);
-            write_file(cfg.output_dir + "/404.html", html_404);
+            utils::write_file(cfg.output_dir + "/404.html", html_404);
         }
     }
 

@@ -12,13 +12,21 @@ TemplateRenderer::TemplateRenderer(const std::string& template_dir)
     : template_dir_(template_dir) {}
 
 std::string TemplateRenderer::load_template(const std::string& name) const {
+    // Check cache first
+    auto it = template_cache_.find(name);
+    if (it != template_cache_.end()) {
+        return it->second;
+    }
+
     // Try with .html extension
     std::string path = utils::path_join(template_dir_, name + ".html");
     std::ifstream f(path);
     if (f.is_open()) {
         std::ostringstream ss;
         ss << f.rdbuf();
-        return ss.str();
+        std::string tmpl = ss.str();
+        template_cache_[name] = tmpl;
+        return tmpl;
     }
     return ""; // caller falls back to built-in template
 }
@@ -33,10 +41,8 @@ std::string TemplateRenderer::render(const std::string& layout,
                "<body>\n{{ page.content }}\n</body>\n</html>";
     }
 
-    inja::Environment env;
-
     try {
-        return env.render(tmpl, data);
+        return env_.render(tmpl, data);
     } catch (const inja::InjaError& err) {
         std::string template_path = utils::path_join(template_dir_, layout + ".html");
         throw std::runtime_error(
@@ -44,6 +50,10 @@ std::string TemplateRenderer::render(const std::string& layout,
             "' (resolved to " + template_path + "): " + std::string(err.what())
         );
     }
+}
+
+void TemplateRenderer::preload_template(const std::string& name) const {
+    load_template(name);
 }
 
 } // namespace cstatic

@@ -86,3 +86,25 @@ TEST_CASE("replace_extension: no extension", "[path]") {
 TEST_CASE("replace_extension: dot in directory name", "[path]") {
     REQUIRE(replace_extension("foo.v2/bar.md", ".html") == "foo.v2/bar.html");
 }
+
+// --- Windows backslash handling tests ---
+// On macOS/Linux, backslash is not a path separator — std::filesystem treats it
+// as a regular character. On Windows, it IS a separator and these would normalize.
+// We test that the functions handle backslash input without crashing.
+
+#ifdef _WIN32
+TEST_CASE("path_join: backslash normalization on Windows", "[path]") {
+    REQUIRE(path_join("foo\\bar", "baz") == "foo\\bar\\baz");
+    REQUIRE(path_join("foo", "bar\\baz") == "foo\\bar\\baz");
+}
+#else
+TEST_CASE("path_join: backslash preserved on POSIX", "[path]") {
+    // On POSIX, backslash is a valid filename character, not a separator
+    REQUIRE(path_join("foo\\bar", "baz") == "foo\\bar/baz");
+    REQUIRE(path_join("foo", "bar\\baz") == "foo/bar\\baz");
+}
+#endif
+
+TEST_CASE("replace_extension: backslash path", "[path]") {
+    REQUIRE(replace_extension("foo\\bar.md", ".html") == "foo\\bar.html");
+}

@@ -24,6 +24,6 @@ struct BuildResult {
 
 // Run the full build pipeline.
 // If full_rebuild is true, ignore the hash cache and rebuild everything.
-BuildResult build_site(const Config& cfg, bool full_rebuild = false);
+BuildResult build_site(const Config& cfg, bool full_rebuild = false, bool include_drafts = false, int jobs = 0);
 
 } // namespace cstatic

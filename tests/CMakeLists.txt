@@ -21,6 +21,7 @@ set(LIB_SOURCES
     ${CMAKE_SOURCE_DIR}/src/modules/robots.cpp
     ${CMAKE_SOURCE_DIR}/src/template/renderer.cpp
     ${CMAKE_SOURCE_DIR}/src/pipeline/builder.cpp
+    ${CMAKE_SOURCE_DIR}/src/utils/file_io.cpp
     ${CMAKE_SOURCE_DIR}/src/utils/path.cpp
 )
 
@@ -34,6 +35,7 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/tests/test_template_renderer.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_minifier.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_data_loader.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_build_integration.cpp
 )
 
 add_executable(cstatic_tests ${TEST_SOURCES} ${LIB_SOURCES})
@@ -58,3 +60,26 @@ target_link_libraries(cstatic_tests PRIVATE
 include(CTest)
 include(Catch)
 catch_discover_tests(cstatic_tests)
+
+# --- Benchmarks (opt-in via CSTATIC_BUILD_BENCHMARKS) ---
+option(CSTATIC_BUILD_BENCHMARKS "Build benchmarks" OFF)
+if(CSTATIC_BUILD_BENCHMARKS)
+    add_executable(cstatic_bench
+        ${CMAKE_SOURCE_DIR}/tests/bench_build.cpp
+        ${LIB_SOURCES}
+    )
+    target_include_directories(cstatic_bench PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+    )
+    target_link_libraries(cstatic_bench PRIVATE
+        Catch2::Catch2WithMain
+        CLI11::CLI11
+        tomlplusplus::tomlplusplus
+        yaml-cpp::yaml-cpp
+        cmark::cmark_static
+        inja
+        nlohmann_json
+        xxHash::xxhash
+        httplib::httplib
+    )
+endif()

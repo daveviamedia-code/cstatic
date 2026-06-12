@@ -1,8 +1,8 @@
 #pragma once
 
 #include <string>
-#include <map>
 #include <ctime>
+#include <nlohmann/json.hpp>
 
 namespace cstatic {
 
@@ -14,7 +14,7 @@ struct Frontmatter {
     std::string date;             // ISO date string, e.g. "2024-01-15"
     std::vector<std::string> tags;
     bool draft = false;
-    std::map<std::string, std::string> custom;  // any extra key-value pairs
+    nlohmann::json custom = nlohmann::json::object();  // any extra key-value pairs
 };
 
 // Result of parsing a content file: frontmatter + body (without the --- delimiters).

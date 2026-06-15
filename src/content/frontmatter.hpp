@@ -13,7 +13,13 @@ struct Frontmatter {
     std::string permalink;        // empty = auto-compute from file path
     std::string date;             // ISO date string, e.g. "2024-01-15"
     std::vector<std::string> tags;
+    std::vector<std::string> aliases;
     bool draft = false;
+    std::string description;          // SEO description (falls back to excerpt)
+    std::string image;                // OG image URL (relative or absolute)
+    std::string canonical;            // canonical URL override
+    std::string sitemap_changefreq;   // e.g. "monthly"
+    std::string sitemap_priority;     // e.g. "0.8" (string for tolerant YAML parsing)
     nlohmann::json custom = nlohmann::json::object();  // any extra key-value pairs
 };
 

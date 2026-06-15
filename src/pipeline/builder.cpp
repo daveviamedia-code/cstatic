@@ -8,6 +8,7 @@
 #include "modules/sitemap.hpp"
 #include "modules/rss.hpp"
 #include "modules/robots.hpp"
+#include "modules/search.hpp"
 #include "template/renderer.hpp"
 #include "utils/path.hpp"
 #include "utils/terminal.hpp"
@@ -15,12 +16,15 @@
 
 #include <nlohmann/json.hpp>
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <iostream>
 #include <algorithm>
+#include <mutex>
 #include <regex>
 #include <thread>
 #include <unordered_set>
+#include <map>
 
 namespace cstatic {
 
@@ -101,6 +105,50 @@ struct PageRecord {
     std::vector<std::string> deps;       // hash keys this page depends on
 };
 
+// Build an HTML string of SEO meta tags (Open Graph, Twitter Card, canonical link).
+// Injected into templates as {{ seo_meta }}.
+static std::string build_seo_meta(
+    const std::string& title, const std::string& url, const std::string& description,
+    const std::string& excerpt, const std::string& image, const std::string& canonical,
+    const std::string& base_url, const std::string& twitter_handle)
+{
+    std::string desc = !description.empty() ? description : excerpt;
+    std::string card = !image.empty() ? "summary_large_image" : "summary";
+    std::string canonical_url = !canonical.empty() ? canonical : (base_url + url);
+
+    std::string image_url = image;
+    if (!image_url.empty() && image_url.front() == '/') {
+        image_url = base_url + image_url;
+    }
+
+    std::ostringstream out;
+    if (!desc.empty()) {
+        out << "<meta name=\"description\" content=\""
+            << utils::xml_escape(desc) << "\">\n";
+    }
+    out << "<meta property=\"og:title\" content=\""
+        << utils::xml_escape(title) << "\">\n";
+    if (!desc.empty()) {
+        out << "<meta property=\"og:description\" content=\""
+            << utils::xml_escape(desc) << "\">\n";
+    }
+    out << "<meta property=\"og:url\" content=\""
+        << utils::xml_escape(canonical_url) << "\">\n";
+    if (!image_url.empty()) {
+        out << "<meta property=\"og:image\" content=\""
+            << utils::xml_escape(image_url) << "\">\n";
+    }
+    out << "<meta name=\"twitter:card\" content=\"" << card << "\">\n";
+    if (!twitter_handle.empty()) {
+        out << "<meta name=\"twitter:site\" content=\""
+            << utils::xml_escape(twitter_handle) << "\">\n";
+    }
+    out << "<link rel=\"canonical\" href=\""
+        << utils::xml_escape(canonical_url) << "\">\n";
+
+    return out.str();
+}
+
 // --- Data-driven page builders ---
 
 static void build_paginated_pages(
@@ -114,7 +162,8 @@ static void build_paginated_pages(
     const std::string& template_key,
     std::vector<CachedOutput>& outputs,
     std::vector<PageRecord>& records,
-    int& pages_built
+    int& pages_built,
+    std::vector<BuildError>* errors = nullptr
 ) {
     if (!items.is_array() || items.empty()) return;
 
@@ -175,7 +224,22 @@ static void build_paginated_pages(
         ctx["page"]["title"] = ds.template_name;
         ctx["page"]["content"] = "";
 
-        std::string html = renderer.render(ds.template_name, ctx);
+        std::string html;
+        try {
+            html = renderer.render(ds.template_name, ctx, ds.file);
+        } catch (const RenderError& e) {
+            if (errors) {
+                errors->push_back({BuildError::Type::Template, e.source_file(),
+                                   e.template_name(), e.line(), e.what()});
+            }
+            continue;
+        } catch (const std::runtime_error& e) {
+            if (errors) {
+                errors->push_back({BuildError::Type::Generic, ds.file,
+                                   ds.template_name, 0, e.what()});
+            }
+            continue;
+        }
         outputs.push_back({output_path, html});
 
         PageRecord rec;
@@ -199,7 +263,8 @@ static void build_per_item_pages(
     const std::string& template_key,
     std::vector<CachedOutput>& outputs,
     std::vector<PageRecord>& records,
-    int& pages_built
+    int& pages_built,
+    std::vector<BuildError>* errors = nullptr
 ) {
     if (!items.is_array()) return;
 
@@ -235,7 +300,31 @@ static void build_per_item_pages(
         ctx["page"] = item;
         ctx["page"]["url"] = item_url;
 
-        std::string html = renderer.render(ds.template_name, ctx);
+        ctx["seo_meta"] = build_seo_meta(
+            item.value("title", ""), item_url,
+            item.value("description", ""),
+            item.value("excerpt", ""),
+            item.value("image", ""),
+            item.value("canonical", ""),
+            site_ctx.value("base_url", ""),
+            site_ctx.value("twitter_handle", ""));
+
+        std::string html;
+        try {
+            html = renderer.render(ds.template_name, ctx, ds.file);
+        } catch (const RenderError& e) {
+            if (errors) {
+                errors->push_back({BuildError::Type::Template, e.source_file(),
+                                   e.template_name(), e.line(), e.what()});
+            }
+            continue;
+        } catch (const std::runtime_error& e) {
+            if (errors) {
+                errors->push_back({BuildError::Type::Generic, ds.file,
+                                   ds.template_name, 0, e.what()});
+            }
+            continue;
+        }
         outputs.push_back({output_path, html});
 
         PageRecord rec;
@@ -277,9 +366,47 @@ static std::string generate_builtin_404(const Config& cfg) {
 
 // --- Main build pipeline ---
 
+// Run a build hook script. Returns true on success, false on failure.
+// If the script path is empty or the file doesn't exist, returns true (warns for missing file).
+static bool run_hook(const std::string& script, const std::string& env,
+                     const std::string& output_dir, int pages_built) {
+    if (script.empty()) return true;
+
+    if (!fs::exists(script)) {
+        std::cerr << utils::warning_label() << " hook script '" << script
+                  << "' not found — skipping\n";
+        return true;
+    }
+
+    // Set environment variables for the hook
+#ifdef _WIN32
+    _putenv_s("CSTATIC_ENV", env.c_str());
+    _putenv_s("CSTATIC_OUTPUT_DIR", output_dir.c_str());
+    _putenv_s("CSTATIC_PAGES_BUILT", std::to_string(pages_built).c_str());
+#else
+    setenv("CSTATIC_ENV", env.c_str(), 1);
+    setenv("CSTATIC_OUTPUT_DIR", output_dir.c_str(), 1);
+    setenv("CSTATIC_PAGES_BUILT", std::to_string(pages_built).c_str(), 1);
+#endif
+
+    int rc = std::system(script.c_str());
+    return rc == 0;
+}
+
 BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts, int jobs) {
     auto start = std::chrono::high_resolution_clock::now();
     BuildResult result;
+
+    // --- Run before_build hook ---
+    if (!run_hook(cfg.hook_before_build, cfg.env, cfg.output_dir, 0)) {
+        result.errors.push_back({
+            BuildError::Type::Generic, "", "before_build", 0,
+            "before_build hook failed: '" + cfg.hook_before_build + "'"
+        });
+        auto end = std::chrono::high_resolution_clock::now();
+        result.elapsed_ms = std::chrono::duration<double, std::milli>(end - start).count();
+        return result;
+    }
 
     bool incremental = cfg.incremental_enabled && !full_rebuild;
 
@@ -330,10 +457,26 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
     // --- Set up renderer and site context ---
     TemplateRenderer renderer(cfg.template_dir);
 
+    // Pre-compute asset manifest if fingerprinting is enabled.
+    // This must happen before rendering so {{ asset() }} resolves correctly.
+    AssetManifest asset_manifest;
+    if (cfg.fingerprint_assets) {
+        asset_manifest = build_asset_manifest(cfg);
+        renderer.set_asset_manifest(asset_manifest.entries);
+    }
+
     nlohmann::json site_ctx;
     site_ctx["title"] = cfg.site_title;
     site_ctx["base_url"] = cfg.site_base_url;
     site_ctx["language"] = cfg.site_language;
+    site_ctx["twitter_handle"] = cfg.site_twitter_handle;
+    site_ctx["env"] = cfg.env;
+
+    // Markdown rendering options (syntax highlighting + GFM extensions).
+    MarkdownOptions md_opts;
+    md_opts.highlight_enabled = cfg.highlight_enabled;
+    md_opts.highlight_style   = cfg.highlight_style;
+    md_opts.extensions        = cfg.markdown_extensions;
 
     // --- Phase 1: Parse all markdown pages ---
     struct RawPage {
@@ -343,17 +486,33 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         ParsedContent parsed;
         std::string html_content;
         std::string template_path; // resolved template file path
+        int collection_idx = -1;   // index into cfg.collections (-1 = none)
     };
 
     std::vector<RawPage> raw_pages;
     nlohmann::json pages_array = nlohmann::json::array();
 
+    // Collect alias redirects: alias_url → target page url + date.
+    struct AliasEntry {
+        std::string alias_url;
+        std::string target_url;
+        std::string date;
+    };
+    std::vector<AliasEntry> alias_entries;
+
     for (const auto& file_path : md_files) {
         RawPage rp;
         rp.source_path = file_path;
 
-        std::string content = utils::read_file(file_path);
-        rp.parsed = parse_frontmatter(content, file_path);
+        std::string content;
+        try {
+            content = utils::read_file(file_path);
+            rp.parsed = parse_frontmatter(content, file_path);
+        } catch (const std::exception& e) {
+            result.errors.push_back({BuildError::Type::Frontmatter, file_path,
+                                     "", 0, e.what()});
+            continue;
+        }
 
         if (rp.parsed.frontmatter.draft && !include_drafts) {
             result.pages_skipped++;
@@ -376,7 +535,13 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         } else {
             rp.output_path = utils::url_to_output(rp.url, cfg.output_dir);
         }
-        rp.html_content = render_markdown(rp.parsed.body);
+        try {
+            rp.html_content = render_markdown(rp.parsed.body, md_opts);
+        } catch (const std::exception& e) {
+            result.errors.push_back({BuildError::Type::Markdown, file_path,
+                                     "", 0, e.what()});
+            continue;
+        }
 
         std::string title = rp.parsed.frontmatter.title;
         if (title.empty()) {
@@ -399,6 +564,36 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         }
         rp.template_path = tmpl_path;
 
+        // Match page to a collection by checking if source_path is under source_dir/<collection.name>/
+        for (size_t ci = 0; ci < cfg.collections.size(); ci++) {
+            const auto& col = cfg.collections[ci];
+            std::string col_prefix = utils::path_join(cfg.source_dir, col.name) + "/";
+            if (rp.source_path.size() > col_prefix.size() &&
+                rp.source_path.substr(0, col_prefix.size()) == col_prefix) {
+                rp.collection_idx = static_cast<int>(ci);
+
+                // Override template if no explicit layout in frontmatter
+                if (rp.parsed.frontmatter.layout == "default") {
+                    rp.parsed.frontmatter.layout = col.template_;
+                    std::string col_tmpl_path = utils::path_join(cfg.template_dir, col.template_ + ".html");
+                    rp.template_path = fs::exists(col_tmpl_path) ? col_tmpl_path : "";
+                }
+
+                // Override URL if collection has url_pattern
+                if (!col.url_pattern.empty()) {
+                    std::string slug = fs::path(file_path).stem().string();
+                    nlohmann::json slug_obj;
+                    slug_obj["slug"] = slug;
+                    rp.url = interpolate_url(col.url_pattern, slug_obj);
+                    if (!rp.url.empty() && rp.url.front() != '/') rp.url = "/" + rp.url;
+                    if (!rp.url.empty() && rp.url.back() != '/') rp.url += "/";
+                    rp.output_path = utils::url_to_output(rp.url, cfg.output_dir);
+                }
+
+                break;
+            }
+        }
+
         nlohmann::json tags = nlohmann::json::array();
         for (const auto& tag : rp.parsed.frontmatter.tags) {
             tags.push_back(tag);
@@ -410,9 +605,24 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         page_meta["date"] = rp.parsed.frontmatter.date;
         page_meta["tags"] = tags;
         page_meta["excerpt"] = utils::truncate_text(utils::strip_html_tags(rp.html_content), 200);
+        page_meta["description"]        = rp.parsed.frontmatter.description;
+        page_meta["image"]              = rp.parsed.frontmatter.image;
+        page_meta["canonical"]          = rp.parsed.frontmatter.canonical;
+        page_meta["sitemap_changefreq"] = rp.parsed.frontmatter.sitemap_changefreq;
+        page_meta["sitemap_priority"]   = rp.parsed.frontmatter.sitemap_priority;
         pages_array.push_back(page_meta);
 
         rp.parsed.frontmatter.title = title;
+
+        // Collect alias redirects before moving rp.
+        for (const auto& alias_url : rp.parsed.frontmatter.aliases) {
+            AliasEntry ae;
+            ae.alias_url = alias_url;
+            ae.target_url = rp.url;
+            ae.date = rp.parsed.frontmatter.date;
+            alias_entries.push_back(std::move(ae));
+        }
+
         raw_pages.push_back(std::move(rp));
     }
 
@@ -505,6 +715,209 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         }
     }
 
+    // --- Phase 1.6: Generate collection index pages ---
+    {
+        // Group raw_pages by collection_idx
+        for (size_t ci = 0; ci < cfg.collections.size(); ci++) {
+            const auto& col = cfg.collections[ci];
+
+            // Collect page_meta for pages in this collection
+            nlohmann::json col_pages = nlohmann::json::array();
+            for (const auto& rp : raw_pages) {
+                if (rp.collection_idx != static_cast<int>(ci)) continue;
+
+                nlohmann::json pm;
+                pm["title"] = rp.parsed.frontmatter.title;
+                pm["url"] = rp.url;
+                pm["date"] = rp.parsed.frontmatter.date;
+
+                nlohmann::json tags = nlohmann::json::array();
+                for (const auto& tag : rp.parsed.frontmatter.tags) {
+                    tags.push_back(tag);
+                }
+                pm["tags"] = tags;
+                pm["excerpt"] = utils::truncate_text(utils::strip_html_tags(rp.html_content), 200);
+                col_pages.push_back(pm);
+            }
+
+            if (col_pages.empty()) continue;
+
+            // Sort by the collection's sort_by field
+            bool desc = (col.sort_order == "desc");
+            std::sort(col_pages.begin(), col_pages.end(),
+                [&col, desc](const nlohmann::json& a, const nlohmann::json& b) {
+                    std::string va = a.value(col.sort_by, "");
+                    std::string vb = b.value(col.sort_by, "");
+                    return desc ? (va > vb) : (va < vb);
+                });
+
+            // Render the collection index page
+            std::string index_url = "/" + col.name + "/";
+            std::string index_output = utils::url_to_output(index_url, cfg.output_dir);
+
+            nlohmann::json collection_ctx;
+            collection_ctx["name"] = col.name;
+            collection_ctx["pages"] = col_pages;
+
+            nlohmann::json ctx;
+            ctx["site"] = site_ctx;
+            ctx["pages"] = pages_array;
+            ctx["collection"] = collection_ctx;
+            ctx["page"] = nlohmann::json::object();
+            ctx["page"]["url"] = index_url;
+            ctx["page"]["title"] = col.name;
+            ctx["page"]["content"] = "";
+
+            renderer.preload_template(col.index_template);
+            std::string html = renderer.render(col.index_template, ctx);
+
+            CachedOutput out;
+            out.output_path = index_output;
+            out.html = html;
+            all_outputs.push_back(std::move(out));
+
+            PageRecord rec;
+            rec.output_path = index_output;
+            rec.url = index_url;
+            all_records.push_back(std::move(rec));
+
+            result.pages_built++;
+        }
+    }
+
+    // --- Phase 1.7: Generate taxonomy pages ---
+    {
+        for (const auto& tax : cfg.taxonomies) {
+            // Build map: term -> array of page_meta
+            std::map<std::string, nlohmann::json> term_pages;
+
+            for (const auto& rp : raw_pages) {
+                // Extract the taxonomy key from frontmatter
+                // For "tags", look at rp.parsed.frontmatter.tags
+                // For custom fields, look at custom frontmatter
+                std::vector<std::string> terms;
+
+                if (tax.key == "tags") {
+                    terms = rp.parsed.frontmatter.tags;
+                } else {
+                    // Look in custom frontmatter
+                    if (rp.parsed.frontmatter.custom.contains(tax.key)) {
+                        auto& val = rp.parsed.frontmatter.custom[tax.key];
+                        if (val.is_string()) {
+                            terms.push_back(val.get<std::string>());
+                        } else if (val.is_array()) {
+                            for (const auto& item : val) {
+                                if (item.is_string()) {
+                                    terms.push_back(item.get<std::string>());
+                                }
+                            }
+                        }
+                    }
+                }
+
+                for (const auto& term : terms) {
+                    nlohmann::json pm;
+                    pm["title"] = rp.parsed.frontmatter.title;
+                    pm["url"] = rp.url;
+                    pm["date"] = rp.parsed.frontmatter.date;
+                    pm["excerpt"] = utils::truncate_text(utils::strip_html_tags(rp.html_content), 200);
+
+                    nlohmann::json tags_json = nlohmann::json::array();
+                    for (const auto& tag : rp.parsed.frontmatter.tags) {
+                        tags_json.push_back(tag);
+                    }
+                    pm["tags"] = tags_json;
+
+                    term_pages[term].push_back(pm);
+                }
+            }
+
+            if (term_pages.empty()) continue;
+
+            // Generate term pages: /<key>/<term>/
+            for (const auto& [term, pages] : term_pages) {
+                std::string term_slug = term;
+                std::transform(term_slug.begin(), term_slug.end(), term_slug.begin(),
+                    [](unsigned char c) { return std::tolower(c == ' ' ? '-' : c); });
+
+                std::string term_url = "/" + tax.key + "/" + term_slug + "/";
+                std::string term_output = utils::url_to_output(term_url, cfg.output_dir);
+
+                nlohmann::json tax_ctx;
+                tax_ctx["key"] = tax.key;
+                tax_ctx["term"] = term;
+                tax_ctx["pages"] = pages;
+
+                nlohmann::json ctx;
+                ctx["site"] = site_ctx;
+                ctx["pages"] = pages_array;
+                ctx["taxonomy"] = tax_ctx;
+                ctx["page"] = nlohmann::json::object();
+                ctx["page"]["url"] = term_url;
+                ctx["page"]["title"] = term;
+
+                renderer.preload_template(tax.template_);
+                std::string html = renderer.render(tax.template_, ctx);
+
+                CachedOutput out;
+                out.output_path = term_output;
+                out.html = html;
+                all_outputs.push_back(std::move(out));
+
+                PageRecord rec;
+                rec.output_path = term_output;
+                rec.url = term_url;
+                all_records.push_back(std::move(rec));
+
+                result.pages_built++;
+            }
+
+            // Generate taxonomy index page: /<key>/
+            nlohmann::json terms_array = nlohmann::json::array();
+            for (const auto& [term, pages] : term_pages) {
+                std::string term_slug = term;
+                std::transform(term_slug.begin(), term_slug.end(), term_slug.begin(),
+                    [](unsigned char c) { return std::tolower(c == ' ' ? '-' : c); });
+
+                nlohmann::json term_obj;
+                term_obj["term"] = term;
+                term_obj["count"] = pages.size();
+                term_obj["url"] = "/" + tax.key + "/" + term_slug + "/";
+                terms_array.push_back(term_obj);
+            }
+
+            std::string index_url = "/" + tax.key + "/";
+            std::string index_output = utils::url_to_output(index_url, cfg.output_dir);
+
+            nlohmann::json tax_index_ctx;
+            tax_index_ctx["key"] = tax.key;
+            tax_index_ctx["terms"] = terms_array;
+
+            nlohmann::json ctx;
+            ctx["site"] = site_ctx;
+            ctx["pages"] = pages_array;
+            ctx["taxonomy"] = tax_index_ctx;
+            ctx["page"] = nlohmann::json::object();
+            ctx["page"]["url"] = index_url;
+            ctx["page"]["title"] = tax.key;
+
+            renderer.preload_template(tax.index_template);
+            std::string index_html = renderer.render(tax.index_template, ctx);
+
+            CachedOutput out;
+            out.output_path = index_output;
+            out.html = index_html;
+            all_outputs.push_back(std::move(out));
+
+            PageRecord rec;
+            rec.output_path = index_output;
+            rec.url = index_url;
+            all_records.push_back(std::move(rec));
+
+            result.pages_built++;
+        }
+    }
+
     // --- Phase 2: Render markdown pages, track dependencies, decide what to rebuild ---
 
     // Build task list and pre-load templates
@@ -562,6 +975,31 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
     std::vector<std::string> rendered_html(N);
     std::vector<bool> was_rendered(N, false);
 
+    // Build collections JSON for template context
+    nlohmann::json collections_json = nlohmann::json::object();
+    for (size_t ci = 0; ci < cfg.collections.size(); ci++) {
+        const auto& col = cfg.collections[ci];
+        nlohmann::json col_pages = nlohmann::json::array();
+        for (const auto& rp : raw_pages) {
+            if (rp.collection_idx != static_cast<int>(ci)) continue;
+            nlohmann::json pm;
+            pm["title"] = rp.parsed.frontmatter.title;
+            pm["url"] = rp.url;
+            pm["date"] = rp.parsed.frontmatter.date;
+            col_pages.push_back(pm);
+        }
+        bool desc = (col.sort_order == "desc");
+        std::sort(col_pages.begin(), col_pages.end(),
+            [&col, desc](const nlohmann::json& a, const nlohmann::json& b) {
+                std::string va = a.value(col.sort_by, "");
+                std::string vb = b.value(col.sort_by, "");
+                return desc ? (va > vb) : (va < vb);
+            });
+        collections_json[col.name] = col_pages;
+    }
+
+    std::mutex errors_mutex;
+
     auto render_task = [&](size_t start, size_t end) {
         for (size_t ti = start; ti < end; ti++) {
             size_t page_idx = rebuild_indices[ti];
@@ -589,9 +1027,28 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
             ctx["site"] = site_ctx;
             ctx["pages"] = pages_array;
             ctx["data"] = all_data;
+            ctx["collections"] = collections_json;
 
-            rendered_html[ti] = renderer.render(rp.parsed.frontmatter.layout, ctx);
-            was_rendered[ti] = true;
+            ctx["seo_meta"] = build_seo_meta(
+                rp.parsed.frontmatter.title, rp.url,
+                rp.parsed.frontmatter.description,
+                utils::truncate_text(utils::strip_html_tags(rp.html_content), 200),
+                rp.parsed.frontmatter.image, rp.parsed.frontmatter.canonical,
+                cfg.site_base_url, cfg.site_twitter_handle);
+
+            try {
+                rendered_html[ti] = renderer.render(rp.parsed.frontmatter.layout,
+                                                     ctx, rp.source_path);
+                was_rendered[ti] = true;
+            } catch (const RenderError& e) {
+                std::lock_guard<std::mutex> lock(errors_mutex);
+                result.errors.push_back({BuildError::Type::Template, e.source_file(),
+                                         e.template_name(), e.line(), e.what()});
+            } catch (const std::runtime_error& e) {
+                std::lock_guard<std::mutex> lock(errors_mutex);
+                result.errors.push_back({BuildError::Type::Generic, rp.source_path,
+                                         rp.parsed.frontmatter.layout, 0, e.what()});
+            }
         }
     };
 
@@ -695,14 +1152,14 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
                                       renderer, cfg.output_dir,
                                       data_file_path, tmpl_path,
                                       all_outputs, all_records,
-                                      result.pages_built);
+                                      result.pages_built, &result.errors);
             }
             if (ds.per_item) {
                 build_per_item_pages(ds, items, site_ctx, pages_array,
                                      renderer, cfg.output_dir,
                                      data_file_path, tmpl_path,
                                      all_outputs, all_records,
-                                     result.pages_built);
+                                     result.pages_built, &result.errors);
             }
         } else {
             // Data-driven pages unchanged — count them as cached.
@@ -789,14 +1246,78 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
             page_meta["title"] = "";
             page_meta["url"] = rec.url;
             page_meta["date"] = "";
+            page_meta["description"]        = "";
+            page_meta["image"]              = "";
+            page_meta["canonical"]          = "";
+            page_meta["sitemap_changefreq"] = "";
+            page_meta["sitemap_priority"]   = "";
             pages_array.push_back(page_meta);
             known_urls.insert(rec.url);
         }
     }
 
+    // --- Phase 3.5: Generate alias redirect pages ---
+    // Aliases must NOT appear in {{ pages }} during rendering (Phase 2 is done
+    // by this point) but MUST appear in sitemap. We add them to pages_array now.
+    for (const auto& ae : alias_entries) {
+        // Normalize alias URL → on-disk output path.
+        std::string rel = ae.alias_url;
+        while (!rel.empty() && rel.front() == '/') rel.erase(rel.begin());
+
+        std::string alias_output;
+        if (rel.empty()) {
+            alias_output = cfg.output_dir + "/index.html";
+        } else {
+            auto last_slash = rel.rfind('/');
+            std::string last_seg = (last_slash != std::string::npos)
+                ? rel.substr(last_slash + 1) : rel;
+            bool has_ext = !last_seg.empty() && last_seg.find('.') != std::string::npos;
+            if (has_ext) {
+                alias_output = cfg.output_dir + "/" + rel;
+            } else if (!rel.empty() && rel.back() == '/') {
+                alias_output = cfg.output_dir + "/" + rel + "index.html";
+            } else {
+                alias_output = cfg.output_dir + "/" + rel + "/index.html";
+            }
+        }
+
+        // Build the redirect HTML.
+        std::string html = "<!DOCTYPE html>\n<html>\n<head>\n"
+            "<meta charset=\"utf-8\">\n"
+            "<title>Redirecting...</title>\n"
+            "<link rel=\"canonical\" href=\"" + ae.target_url + "\">\n"
+            "<meta http-equiv=\"refresh\" content=\"0; url=" + ae.target_url + "\">\n"
+            "</head>\n<body>\n"
+            "<p>Redirecting to <a href=\"" + ae.target_url + "\">" +
+            ae.target_url + "</a>.</p>\n"
+            "</body>\n</html>";
+
+        all_outputs.push_back({alias_output, html});
+
+        PageRecord rec;
+        rec.output_path = alias_output;
+        rec.url = ae.alias_url;
+        all_records.push_back(std::move(rec));
+
+        nlohmann::json alias_meta;
+        alias_meta["title"] = "";
+        alias_meta["url"] = ae.alias_url;
+        alias_meta["date"] = ae.date;
+        pages_array.push_back(alias_meta);
+
+        result.pages_built++;
+    }
+
     // --- Write outputs ---
     // Only clean output dir and rewrite on full rebuild or if there are changes.
     // For incremental: we need to be smarter — only remove orphaned outputs.
+
+    // Apply HTML minification to all rendered outputs if enabled.
+    if (cfg.minify_html) {
+        for (auto& out : all_outputs) {
+            out.html = minify_html(out.html);
+        }
+    }
     if (!incremental) {
         // Full rebuild: clean and write everything
         if (fs::exists(cfg.output_dir)) {
@@ -834,10 +1355,11 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         }
     }
 
-    // --- Process static assets (copy + minify) ---
+    // --- Process static assets (copy + minify + optional image optimization + fingerprinting) ---
     {
         std::vector<std::string> asset_paths;
-        auto asset_result = process_assets(cfg, hashes, incremental, asset_paths);
+        AssetManifest* manifest_ptr = cfg.fingerprint_assets ? &asset_manifest : nullptr;
+        auto asset_result = process_assets(cfg, hashes, incremental, asset_paths, manifest_ptr);
         result.assets_copied = asset_result.files_copied;
         result.assets_minified = asset_result.files_minified;
         result.assets_cached = asset_result.files_cached;
@@ -858,6 +1380,9 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         if (cfg.module_robots) {
             modules::generate_robots(cfg, cfg.output_dir);
         }
+        if (cfg.search_enabled) {
+            modules::generate_search_index(cfg, pages_array, cfg.output_dir);
+        }
         // Generate built-in 404 page if no src/404.md was processed
         bool has_404 = false;
         for (const auto& rp : raw_pages) {
@@ -867,6 +1392,21 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
             std::string html_404 = generate_builtin_404(cfg);
             utils::write_file(cfg.output_dir + "/404.html", html_404);
         }
+        // Generate syntax highlighting stylesheet when enabled.
+        if (cfg.highlight_enabled) {
+            std::string css_dir = cfg.output_dir + "/css";
+            fs::create_directories(css_dir);
+            utils::write_file(css_dir + "/highlight.css",
+                              highlight_css(cfg.highlight_style));
+        }
+    }
+
+    // --- Run after_build hook ---
+    if (!run_hook(cfg.hook_after_build, cfg.env, cfg.output_dir, result.pages_built)) {
+        result.errors.push_back({
+            BuildError::Type::Generic, "", "after_build", 0,
+            "after_build hook failed: '" + cfg.hook_after_build + "'"
+        });
     }
 
     // --- Save hash cache ---

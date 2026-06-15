@@ -32,11 +32,11 @@ FetchContent_Declare(
     GIT_TAG        0.8.0
 )
 
-# cmark — Markdown to HTML (C library)
+# cmark-gfm — GitHub-Flavored Markdown to HTML (tables, task lists, strikethrough)
 FetchContent_Declare(
-    cmark
-    GIT_REPOSITORY https://github.com/commonmark/cmark.git
-    GIT_TAG        0.30.3
+    cmark-gfm
+    GIT_REPOSITORY https://github.com/github/cmark-gfm.git
+    GIT_TAG        0.29.0.gfm.13
 )
 
 # inja — Template engine (header-only)
@@ -62,18 +62,27 @@ FetchContent_Declare(
     GIT_TAG        v0.15.3
 )
 
+# stb — image loading/writing (header-only, from nothings/stb)
+FetchContent_Declare(
+    stb
+    GIT_REPOSITORY https://github.com/nothings/stb.git
+    GIT_TAG        master
+)
+
 # --- Dependency options (set before MakeAvailable) ---
 # Disable tests in dependencies (not our own tests)
 set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(INJA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(INJA_BUILD_BENCHMARK OFF CACHE BOOL "" FORCE)
 set(CMARK_TESTS OFF CACHE BOOL "" FORCE)
+set(CMARK_SHARED OFF CACHE BOOL "" FORCE)
+set(CMARK_STATIC ON CACHE BOOL "" FORCE)
 
 # cpp-httplib — we only use it for local dev server, no HTTPS needed
 set(HTTPLIB_REQUIRE_OPENSSL OFF CACHE BOOL "" FORCE)
 set(HTTPLIB_REQUIRE_ZLIB OFF CACHE BOOL "" FORCE)
 
-FetchContent_MakeAvailable(cli11 tomlplusplus yaml-cpp cmark inja xxhash cpp-httplib)
+FetchContent_MakeAvailable(cli11 tomlplusplus yaml-cpp cmark-gfm inja xxhash cpp-httplib stb)
 
 # --- Main executable ---
 add_executable(cstatic
@@ -87,7 +96,9 @@ add_executable(cstatic
     src/modules/sitemap.cpp
     src/modules/rss.cpp
     src/modules/robots.cpp
+    src/modules/search.cpp
     src/server/dev_server.cpp
+    src/stb_impl.cpp
     src/template/renderer.cpp
     src/pipeline/builder.cpp
     src/utils/file_io.cpp
@@ -96,13 +107,18 @@ add_executable(cstatic
 
 target_include_directories(cstatic PRIVATE
     ${CMAKE_SOURCE_DIR}/src
+    ${stb_SOURCE_DIR}
+    ${cmark-gfm_SOURCE_DIR}/src
+    ${cmark-gfm_SOURCE_DIR}/extensions
+    ${cmark-gfm_BINARY_DIR}/src
 )
 
 target_link_libraries(cstatic PRIVATE
     CLI11::CLI11
     tomlplusplus::tomlplusplus
     yaml-cpp::yaml-cpp
-    cmark::cmark_static
+    libcmark-gfm_static
+    libcmark-gfm-extensions_static
     inja                 # inja creates target 'inja' (alias: pantor::inja)
     nlohmann_json        # provided by inja's embedded copy
     xxHash::xxhash

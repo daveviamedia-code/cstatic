@@ -186,3 +186,50 @@ base_url = "https://example.com"
     REQUIRE(cfg.data_dir == "_data");
     fs::remove(path);
 }
+
+TEST_CASE_METHOD(ConfigFixture, "Config: env default is development", "[config]") {
+    std::string path = write_temp_config(R"(
+[site]
+title = "Env Test"
+base_url = "https://example.com"
+)");
+    auto cfg = cstatic::load_config(path);
+    REQUIRE(cfg.env == "development");
+    fs::remove(path);
+}
+
+TEST_CASE_METHOD(ConfigFixture, "Config: env overlay merges", "[config]") {
+    std::string path = write_temp_config(R"(
+[site]
+title = "Base Title"
+base_url = "https://example.com"
+)");
+    // Write overlay: override base_url but leave title alone.
+    std::string overlay_path = "test_config.production.toml";
+    {
+        std::ofstream f(overlay_path);
+        f << R"([site]
+base_url = "https://prod.example.com"
+)";
+    }
+
+    auto cfg = cstatic::load_config(path, "production");
+    REQUIRE(cfg.env == "production");
+    REQUIRE(cfg.site_title == "Base Title");     // unchanged from base
+    REQUIRE(cfg.site_base_url == "https://prod.example.com");  // overridden
+
+    fs::remove(path);
+    fs::remove(overlay_path);
+}
+
+TEST_CASE_METHOD(ConfigFixture, "Config: missing overlay warns but continues", "[config]") {
+    std::string path = write_temp_config(R"(
+[site]
+title = "No Overlay"
+base_url = "https://example.com"
+)");
+    auto cfg = cstatic::load_config(path, "staging");
+    REQUIRE(cfg.env == "staging");
+    REQUIRE(cfg.site_title == "No Overlay");
+    fs::remove(path);
+}

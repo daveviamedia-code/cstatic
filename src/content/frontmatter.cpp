@@ -109,15 +109,48 @@ ParsedContent parse_frontmatter(const std::string& content, const std::string& f
     if (node["draft"]) {
         result.frontmatter.draft = node["draft"].as<bool>();
     }
+    if (node["description"]) {
+        result.frontmatter.description = node["description"].as<std::string>();
+    }
+    if (node["image"]) {
+        result.frontmatter.image = node["image"].as<std::string>();
+    }
+    if (node["canonical"]) {
+        result.frontmatter.canonical = node["canonical"].as<std::string>();
+    }
+    if (node["sitemap_changefreq"]) {
+        result.frontmatter.sitemap_changefreq = node["sitemap_changefreq"].as<std::string>();
+    }
+    if (node["sitemap_priority"]) {
+        // Tolerate both numeric (0.8) and string ("0.8") YAML
+        try {
+            result.frontmatter.sitemap_priority = node["sitemap_priority"].as<std::string>();
+        } catch (...) {
+            try {
+                double dv = node["sitemap_priority"].as<double>();
+                std::ostringstream ss;
+                ss << dv;
+                result.frontmatter.sitemap_priority = ss.str();
+            } catch (...) {
+                result.frontmatter.sitemap_priority.clear();
+            }
+        }
+    }
     if (node["tags"] && node["tags"].IsSequence()) {
         for (const auto& tag : node["tags"]) {
             result.frontmatter.tags.push_back(tag.as<std::string>());
         }
     }
+    if (node["aliases"] && node["aliases"].IsSequence()) {
+        for (const auto& a : node["aliases"]) {
+            result.frontmatter.aliases.push_back(a.as<std::string>());
+        }
+    }
 
     // Collect remaining keys as custom fields
     static const char* known_keys[] = {
-        "title", "layout", "permalink", "date", "tags", "draft"
+        "title", "layout", "permalink", "date", "tags", "aliases", "draft",
+        "description", "image", "canonical", "sitemap_changefreq", "sitemap_priority"
     };
     for (auto it = node.begin(); it != node.end(); ++it) {
         std::string key = it->first.as<std::string>();

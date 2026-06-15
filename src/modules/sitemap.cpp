@@ -63,6 +63,15 @@ void generate_sitemap(const Config& cfg, const nlohmann::json& pages,
             xml << "    <lastmod>" << utils::xml_escape(date) << "</lastmod>\n";
         }
 
+        std::string changefreq = page.value("sitemap_changefreq", "");
+        if (!changefreq.empty()) {
+            xml << "    <changefreq>" << utils::xml_escape(changefreq) << "</changefreq>\n";
+        }
+        std::string priority = page.value("sitemap_priority", "");
+        if (!priority.empty()) {
+            xml << "    <priority>" << utils::xml_escape(priority) << "</priority>\n";
+        }
+
         xml << "  </url>\n";
         count++;
     }

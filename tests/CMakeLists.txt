@@ -19,6 +19,8 @@ set(LIB_SOURCES
     ${CMAKE_SOURCE_DIR}/src/modules/sitemap.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/rss.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/robots.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/search.cpp
+    ${CMAKE_SOURCE_DIR}/src/stb_impl.cpp
     ${CMAKE_SOURCE_DIR}/src/template/renderer.cpp
     ${CMAKE_SOURCE_DIR}/src/pipeline/builder.cpp
     ${CMAKE_SOURCE_DIR}/src/utils/file_io.cpp
@@ -42,6 +44,10 @@ add_executable(cstatic_tests ${TEST_SOURCES} ${LIB_SOURCES})
 
 target_include_directories(cstatic_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/src
+    ${stb_SOURCE_DIR}
+    ${cmark-gfm_SOURCE_DIR}/src
+    ${cmark-gfm_SOURCE_DIR}/extensions
+    ${cmark-gfm_BINARY_DIR}/src
 )
 
 target_link_libraries(cstatic_tests PRIVATE
@@ -49,7 +55,8 @@ target_link_libraries(cstatic_tests PRIVATE
     CLI11::CLI11
     tomlplusplus::tomlplusplus
     yaml-cpp::yaml-cpp
-    cmark::cmark_static
+    libcmark-gfm_static
+    libcmark-gfm-extensions_static
     inja
     nlohmann_json
     xxHash::xxhash
@@ -70,13 +77,18 @@ if(CSTATIC_BUILD_BENCHMARKS)
     )
     target_include_directories(cstatic_bench PRIVATE
         ${CMAKE_SOURCE_DIR}/src
+        ${stb_SOURCE_DIR}
+        ${cmark-gfm_SOURCE_DIR}/src
+        ${cmark-gfm_SOURCE_DIR}/extensions
+        ${cmark-gfm_BINARY_DIR}/src
     )
     target_link_libraries(cstatic_bench PRIVATE
         Catch2::Catch2WithMain
         CLI11::CLI11
         tomlplusplus::tomlplusplus
         yaml-cpp::yaml-cpp
-        cmark::cmark_static
+        libcmark-gfm_static
+        libcmark-gfm-extensions_static
         inja
         nlohmann_json
         xxHash::xxhash

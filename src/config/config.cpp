@@ -3,11 +3,14 @@
 
 #include <toml++/toml.hpp>
 #include <nlohmann/json.hpp>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <sstream>
 
 namespace cstatic {
+
+namespace fs = std::filesystem;
 
 namespace {
 
@@ -120,9 +123,32 @@ std::vector<std::string> optional_string_array(const toml::table& tbl,
     return result;
 }
 
+// Deep-merge overlay table into base table. Tables recurse; everything else
+// (including arrays) is replaced wholesale.
+void merge_table(toml::table& base, const toml::table& overlay) {
+    for (const auto& [k, v] : overlay) {
+        auto* bn = base.get(k);
+        if (bn && bn->is_table() && v.is_table()) {
+            merge_table(*bn->as_table(), *v.as_table());
+        } else if (v.is_table()) {
+            base.insert_or_assign(k, toml::table(*v.as_table()));
+        } else if (v.is_array()) {
+            base.insert_or_assign(k, toml::array(*v.as_array()));
+        } else if (v.is_string()) {
+            base.insert_or_assign(k, v.as_string()->get());
+        } else if (v.is_integer()) {
+            base.insert_or_assign(k, v.as_integer()->get());
+        } else if (v.is_floating_point()) {
+            base.insert_or_assign(k, v.as_floating_point()->get());
+        } else if (v.is_boolean()) {
+            base.insert_or_assign(k, v.as_boolean()->get());
+        }
+    }
+}
+
 } // anonymous namespace
 
-Config load_config(const std::string& path) {
+Config load_config(const std::string& path, const std::string& env) {
     std::string contents = read_file(path);
 
     toml::table tbl;
@@ -135,12 +161,37 @@ Config load_config(const std::string& path) {
         throw ConfigError(msg.str());
     }
 
+    // Apply environment overlay if requested.
+    if (!env.empty()) {
+        fs::path base(path);
+        std::string overlay_path = (base.parent_path() /
+            (base.stem().string() + "." + env + base.extension().string())).string();
+
+        if (fs::exists(overlay_path)) {
+            std::string overlay_contents = read_file(overlay_path);
+            try {
+                toml::table overlay_tbl = toml::parse(overlay_contents, overlay_path);
+                merge_table(tbl, overlay_tbl);
+            } catch (const toml::parse_error& err) {
+                std::ostringstream msg;
+                msg << utils::error_label() << " " << overlay_path << ":"
+                    << err.source().begin.line << " — " << err.description();
+                throw ConfigError(msg.str());
+            }
+        } else {
+            std::cerr << utils::warning_label() << " environment config '"
+                      << overlay_path << "' not found — using base config only\n";
+        }
+    }
+
     Config cfg;
+    cfg.env = env.empty() ? "development" : env;
 
     // --- [site] (required section) ---
     cfg.site_title    = require_string(tbl, "site.title");
     cfg.site_base_url = require_string(tbl, "site.base_url");
     cfg.site_language  = optional_string(tbl, "site.language", cfg.site_language);
+    cfg.site_twitter_handle = optional_string(tbl, "site.twitter_handle", cfg.site_twitter_handle);
 
     // Validate base_url looks like a URL
     if (cfg.site_base_url.find("://") == std::string::npos) {
@@ -166,8 +217,30 @@ Config load_config(const std::string& path) {
     cfg.incremental_hash_file = optional_string(tbl, "build.incremental.hash_file", cfg.incremental_hash_file);
 
     // --- [build.minify] ---
-    cfg.minify_css = optional_bool(tbl, "build.minify.css", cfg.minify_css);
-    cfg.minify_js  = optional_bool(tbl, "build.minify.js",  cfg.minify_js);
+    cfg.minify_css  = optional_bool(tbl, "build.minify.css", cfg.minify_css);
+    cfg.minify_js   = optional_bool(tbl, "build.minify.js",  cfg.minify_js);
+    cfg.minify_html = optional_bool(tbl, "build.minify.html", cfg.minify_html);
+
+    // --- [build.images] ---
+    cfg.images_optimize  = optional_bool(tbl, "build.images.optimize",  cfg.images_optimize);
+    cfg.images_max_width = optional_int(tbl,  "build.images.max_width", cfg.images_max_width);
+    cfg.images_quality   = optional_int(tbl,  "build.images.quality",   cfg.images_quality);
+    cfg.images_webp      = optional_bool(tbl, "build.images.webp",      cfg.images_webp);
+    cfg.images_avif      = optional_bool(tbl, "build.images.avif",      cfg.images_avif);
+
+    // --- [build] fingerprint ---
+    cfg.fingerprint_assets = optional_bool(tbl, "build.fingerprint_assets", cfg.fingerprint_assets);
+
+    // --- [build.search] ---
+    cfg.search_enabled = optional_bool(tbl,   "build.search.enabled", cfg.search_enabled);
+    cfg.search_output  = optional_string(tbl, "build.search.output",  cfg.search_output);
+
+    // --- [build.highlight] ---
+    cfg.highlight_enabled = optional_bool(tbl,   "build.highlight.enabled", cfg.highlight_enabled);
+    cfg.highlight_style   = optional_string(tbl, "build.highlight.style",   cfg.highlight_style);
+
+    // --- [build.markdown] ---
+    cfg.markdown_extensions = optional_string_array(tbl, "build.markdown.extensions");
 
     // --- [modules] ---
     cfg.module_sitemap = optional_bool(tbl, "modules.sitemap", cfg.module_sitemap);
@@ -186,6 +259,10 @@ Config load_config(const std::string& path) {
 
     // --- [sitemap] ---
     cfg.sitemap_exclude = optional_string_array(tbl, "sitemap.exclude");
+
+    // --- [hooks] ---
+    cfg.hook_before_build = optional_string(tbl, "hooks.before_build", "");
+    cfg.hook_after_build  = optional_string(tbl, "hooks.after_build", "");
 
     // --- [data] ---
     cfg.data_dir = optional_string(tbl, "data.data_dir", cfg.data_dir);
@@ -220,6 +297,35 @@ Config load_config(const std::string& path) {
         }
     }
 
+    // --- [[collection]] ---
+    auto col_arr = toml::at_path(tbl, "collection");
+    if (col_arr.is_array_of_tables()) {
+        for (auto& elem : *col_arr.as_array()) {
+            auto& col_tbl = *elem.as_table();
+            Config::Collection col;
+            col.name           = require_string(col_tbl, "name");
+            col.template_      = require_string(col_tbl, "template");
+            col.index_template = optional_string(col_tbl, "index_template", col.name + "-index");
+            col.url_pattern    = optional_string(col_tbl, "url_pattern", "");
+            col.sort_by        = optional_string(col_tbl, "sort_by", "date");
+            col.sort_order     = optional_string(col_tbl, "sort_order", "desc");
+            cfg.collections.push_back(std::move(col));
+        }
+    }
+
+    // --- [[taxonomy]] ---
+    auto tax_arr = toml::at_path(tbl, "taxonomy");
+    if (tax_arr.is_array_of_tables()) {
+        for (auto& elem : *tax_arr.as_array()) {
+            auto& tax_tbl = *elem.as_table();
+            Config::Taxonomy tax;
+            tax.key            = require_string(tax_tbl, "key");
+            tax.template_      = require_string(tax_tbl, "template");
+            tax.index_template = optional_string(tax_tbl, "index_template", tax.key);
+            cfg.taxonomies.push_back(std::move(tax));
+        }
+    }
+
     return cfg;
 }
 
@@ -228,6 +334,8 @@ std::string config_to_json(const Config& cfg) {
     j["site"]["title"]    = cfg.site_title;
     j["site"]["base_url"] = cfg.site_base_url;
     j["site"]["language"] = cfg.site_language;
+    j["site"]["twitter_handle"] = cfg.site_twitter_handle;
+    j["site"]["env"] = cfg.env;
 
     j["build"]["source_dir"]   = cfg.source_dir;
     j["build"]["output_dir"]   = cfg.output_dir;
@@ -237,8 +345,25 @@ std::string config_to_json(const Config& cfg) {
     j["build"]["incremental"]["enabled"]    = cfg.incremental_enabled;
     j["build"]["incremental"]["hash_file"]  = cfg.incremental_hash_file;
 
-    j["build"]["minify"]["css"] = cfg.minify_css;
-    j["build"]["minify"]["js"]  = cfg.minify_js;
+    j["build"]["minify"]["css"]  = cfg.minify_css;
+    j["build"]["minify"]["js"]   = cfg.minify_js;
+    j["build"]["minify"]["html"] = cfg.minify_html;
+
+    j["build"]["images"]["optimize"]  = cfg.images_optimize;
+    j["build"]["images"]["max_width"] = cfg.images_max_width;
+    j["build"]["images"]["quality"]   = cfg.images_quality;
+    j["build"]["images"]["webp"]      = cfg.images_webp;
+    j["build"]["images"]["avif"]      = cfg.images_avif;
+
+    j["build"]["fingerprint_assets"] = cfg.fingerprint_assets;
+
+    j["build"]["search"]["enabled"] = cfg.search_enabled;
+    j["build"]["search"]["output"]  = cfg.search_output;
+
+    j["build"]["highlight"]["enabled"] = cfg.highlight_enabled;
+    j["build"]["highlight"]["style"]   = cfg.highlight_style;
+
+    j["build"]["markdown"]["extensions"] = cfg.markdown_extensions;
 
     j["modules"]["sitemap"] = cfg.module_sitemap;
     j["modules"]["rss"]     = cfg.module_rss;
@@ -253,6 +378,9 @@ std::string config_to_json(const Config& cfg) {
     j["modules"]["robots_disallow"]         = cfg.robots_disallow;
 
     j["sitemap"]["exclude"] = cfg.sitemap_exclude;
+
+    j["hooks"]["before_build"] = cfg.hook_before_build;
+    j["hooks"]["after_build"]  = cfg.hook_after_build;
 
     j["data"]["data_dir"] = cfg.data_dir;
 
@@ -278,6 +406,29 @@ std::string config_to_json(const Config& cfg) {
         rules.push_back(r);
     }
     j["pagination"] = rules;
+
+    auto cols = nlohmann::json::array();
+    for (const auto& col : cfg.collections) {
+        nlohmann::json c;
+        c["name"]           = col.name;
+        c["template"]       = col.template_;
+        c["index_template"] = col.index_template;
+        c["url_pattern"]    = col.url_pattern;
+        c["sort_by"]        = col.sort_by;
+        c["sort_order"]     = col.sort_order;
+        cols.push_back(c);
+    }
+    j["collections"] = cols;
+
+    auto taxes = nlohmann::json::array();
+    for (const auto& tax : cfg.taxonomies) {
+        nlohmann::json t;
+        t["key"]            = tax.key;
+        t["template"]       = tax.template_;
+        t["index_template"] = tax.index_template;
+        taxes.push_back(t);
+    }
+    j["taxonomies"] = taxes;
 
     return j.dump(2);
 }

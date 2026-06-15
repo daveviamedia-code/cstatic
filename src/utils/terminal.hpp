@@ -31,5 +31,6 @@ inline std::string error_label()   { return colorize(color::bold, colorize(color
 inline std::string warning_label() { return colorize(color::bold, colorize(color::yellow, "warn:")); }
 inline std::string info_label()    { return colorize(color::dim, "info:"); }
 inline std::string success_label() { return colorize(color::bold, colorize(color::green, "success:")); }
+inline std::string notice_label()  { return colorize(color::bold, colorize(color::cyan, "notice:")); }
 
 } // namespace cstatic::utils

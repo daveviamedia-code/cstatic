@@ -17,6 +17,8 @@ struct Config {
     std::string site_title;
     std::string site_base_url;
     std::string site_language = "en";
+    std::string site_twitter_handle;        // e.g. "@username"
+    std::string env = "development";
 
     // [build]
     std::string source_dir    = "src";
@@ -29,8 +31,32 @@ struct Config {
     std::string incremental_hash_file = ".cstatic_cache/hashes.json";
 
     // [build.minify]
-    bool minify_css = true;
-    bool minify_js  = true;
+    bool minify_css  = true;
+    bool minify_js   = true;
+    bool minify_html = true;
+
+    // [build.images]
+    bool images_optimize  = false;
+    int  images_max_width = 1920;
+    int  images_quality   = 85;
+    bool images_webp      = false;
+    bool images_avif      = false;
+
+    // [build]
+    bool fingerprint_assets = false;
+
+    // [build.search]
+    bool        search_enabled = false;
+    std::string search_output   = "search-index.json";
+
+    // [build.highlight]
+    bool        highlight_enabled = true;
+    std::string highlight_style   = "github";   // CSS theme name
+
+    // [build.markdown]
+    // GFM extensions to enable. Empty = all four enabled (table, tasklist,
+    // strikethrough, autolink). Otherwise only the listed extensions are on.
+    std::vector<std::string> markdown_extensions;
 
     // [modules]
     bool module_sitemap = true;
@@ -49,6 +75,10 @@ struct Config {
 
     // [sitemap]
     std::vector<std::string> sitemap_exclude;
+
+    // [hooks]
+    std::string hook_before_build;
+    std::string hook_after_build;
 
     // [data]
     std::string data_dir = "_data";
@@ -71,11 +101,30 @@ struct Config {
         std::string template_;   // "posts" — template for paginated index
     };
     std::vector<PaginationRule> pagination_rules;
+
+    // [[collection]] — array of tables for content collections
+    struct Collection {
+        std::string name;           // "posts" — matches src/posts/ directory
+        std::string template_;      // "post" — default layout for items
+        std::string index_template; // "posts-index" — layout for index page
+        std::string url_pattern;    // "/posts/{{ slug }}/" (empty = auto from file path)
+        std::string sort_by = "date";       // frontmatter field to sort by
+        std::string sort_order = "desc";    // "desc" or "asc"
+    };
+    std::vector<Collection> collections;
+
+    // [[taxonomy]] — array of tables for automatic tag/category index pages
+    struct Taxonomy {
+        std::string key;            // "tags" — frontmatter field to index
+        std::string template_;      // "tag" — template for term pages
+        std::string index_template; // "tags" — template for the taxonomy index page
+    };
+    std::vector<Taxonomy> taxonomies;
 };
 
 // Load and validate config from the given TOML file path.
 // Throws ConfigError on any problem (file missing, bad TOML, invalid values).
-Config load_config(const std::string& path);
+Config load_config(const std::string& path, const std::string& env = "");
 
 // Serialize config to JSON string (for cache/debugging).
 std::string config_to_json(const Config& cfg);

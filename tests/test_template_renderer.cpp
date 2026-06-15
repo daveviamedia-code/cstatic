@@ -12,6 +12,7 @@ struct TemplateFixture {
     std::string template_dir;
     TemplateFixture() : template_dir("test_templates") {
         fs::create_directories(template_dir);
+        fs::create_directories(template_dir + "/partials");
     }
     ~TemplateFixture() {
         fs::remove_all(template_dir);
@@ -19,6 +20,11 @@ struct TemplateFixture {
 
     void write_template(const std::string& name, const std::string& content) {
         std::ofstream f(template_dir + "/" + name);
+        f << content;
+    }
+
+    void write_partial(const std::string& name, const std::string& content) {
+        std::ofstream f(template_dir + "/partials/" + name + ".html");
         f << content;
     }
 };
@@ -63,18 +69,20 @@ TEST_CASE_METHOD(TemplateFixture, "Renderer: missing template uses fallback", "[
     REQUIRE(html.find("<!DOCTYPE html>") != std::string::npos);
 }
 
-TEST_CASE_METHOD(TemplateFixture, "Renderer: inja error includes template name", "[template]") {
-    write_template("bad.html", "{{ undefined_var.nonexistent }}");
+TEST_CASE_METHOD(TemplateFixture, "Renderer: inja error throws RenderError with context", "[template]") {
+    write_template("bad.html", "<h1>Line 1</h1>\n<h2>Line 2</h2>\n{{ undefined_var.nonexistent }}");
 
     TemplateRenderer renderer(template_dir);
     nlohmann::json data;
 
-    REQUIRE_THROWS_AS(renderer.render("bad", data), std::runtime_error);
+    REQUIRE_THROWS_AS(renderer.render("bad", data, "src/test.md"), cstatic::RenderError);
     try {
-        renderer.render("bad", data);
-    } catch (const std::runtime_error& e) {
-        std::string msg = e.what();
-        REQUIRE(msg.find("bad") != std::string::npos);
+        renderer.render("bad", data, "src/test.md");
+    } catch (const cstatic::RenderError& e) {
+        REQUIRE(e.template_name() == "bad");
+        REQUIRE(e.source_file() == "src/test.md");
+        REQUIRE(e.line() > 0);
+        REQUIRE(std::string(e.what()).find("undefined_var") != std::string::npos);
     }
 }
 
@@ -91,4 +99,19 @@ TEST_CASE_METHOD(TemplateFixture, "Renderer: loop over pages", "[template]") {
     std::string html = renderer.render("default", data);
     REQUIRE(html.find("<a href=\"/a/\">A</a>") != std::string::npos);
     REQUIRE(html.find("<a href=\"/b/\">B</a>") != std::string::npos);
+}
+
+TEST_CASE_METHOD(TemplateFixture, "Renderer: include partial", "[template]") {
+    write_partial("nav", "<nav>{{ site.title }}</nav>");
+    write_template("default.html",
+        "{% include \"nav\" %}<main>{{ page.content }}</main>");
+
+    TemplateRenderer renderer(template_dir);
+    nlohmann::json data;
+    data["site"]["title"] = "My Site";
+    data["page"]["content"] = "Hello";
+
+    std::string html = renderer.render("default", data);
+    REQUIRE(html.find("<nav>My Site</nav>") != std::string::npos);
+    REQUIRE(html.find("<main>Hello</main>") != std::string::npos);
 }

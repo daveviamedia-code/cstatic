@@ -153,3 +153,49 @@ TEST_CASE("Frontmatter: closing at EOF without trailing newline", "[frontmatter]
     REQUIRE(result.frontmatter.title == "EOF Test");
     // Note: body is everything after the last ---\n
 }
+
+TEST_CASE("Frontmatter: aliases array", "[frontmatter]") {
+    std::string content = "---\n"
+                          "title: Aliased\n"
+                          "aliases: [/old-url/, /another/old/path/]\n"
+                          "---\n"
+                          "Content.";
+    auto result = parse_frontmatter(content, "test.md");
+    REQUIRE(result.frontmatter.aliases.size() == 2);
+    REQUIRE(result.frontmatter.aliases[0] == "/old-url/");
+    REQUIRE(result.frontmatter.aliases[1] == "/another/old/path/");
+    REQUIRE_FALSE(result.frontmatter.custom.contains("aliases"));
+}
+
+TEST_CASE("Frontmatter: SEO and sitemap fields", "[frontmatter]") {
+    std::string content = "---\n"
+                          "title: SEO Post\n"
+                          "description: A great description\n"
+                          "image: /images/hero.png\n"
+                          "canonical: https://example.com/custom-canonical\n"
+                          "sitemap_changefreq: monthly\n"
+                          "sitemap_priority: 0.8\n"
+                          "---\n"
+                          "Content.";
+    auto result = parse_frontmatter(content, "test.md");
+    REQUIRE(result.frontmatter.description == "A great description");
+    REQUIRE(result.frontmatter.image == "/images/hero.png");
+    REQUIRE(result.frontmatter.canonical == "https://example.com/custom-canonical");
+    REQUIRE(result.frontmatter.sitemap_changefreq == "monthly");
+    REQUIRE(result.frontmatter.sitemap_priority == "0.8");
+    REQUIRE_FALSE(result.frontmatter.custom.contains("description"));
+    REQUIRE_FALSE(result.frontmatter.custom.contains("image"));
+    REQUIRE_FALSE(result.frontmatter.custom.contains("canonical"));
+    REQUIRE_FALSE(result.frontmatter.custom.contains("sitemap_changefreq"));
+    REQUIRE_FALSE(result.frontmatter.custom.contains("sitemap_priority"));
+}
+
+TEST_CASE("Frontmatter: numeric sitemap_priority", "[frontmatter]") {
+    std::string content = "---\n"
+                          "title: Numeric Priority\n"
+                          "sitemap_priority: 0.8\n"
+                          "---\n"
+                          "Content.";
+    auto result = parse_frontmatter(content, "test.md");
+    REQUIRE(result.frontmatter.sitemap_priority == "0.8");
+}

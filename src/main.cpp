@@ -1,18 +1,22 @@
 #include <CLI/CLI.hpp>
+#include <fstream>
 #include <iostream>
+#include <sstream>
 #include <string>
+#include <vector>
 
 #include "config/config.hpp"
 #include "pipeline/builder.hpp"
 #include "server/dev_server.hpp"
 #include "utils/terminal.hpp"
+#include "utils/path.hpp"
 
 namespace fs = std::filesystem;
 using namespace cstatic::utils;
 
 int cmd_init();
-int cmd_build(bool full_rebuild, bool include_drafts, int jobs);
-int cmd_serve(int port, bool include_drafts);
+int cmd_build(bool full_rebuild, bool include_drafts, int jobs, const std::string& env);
+int cmd_serve(int port, bool include_drafts, const std::string& env);
 
 int main(int argc, char** argv) {
     CLI::App app{"C-Static — a high-performance static site generator", "cstatic"};
@@ -28,19 +32,23 @@ int main(int argc, char** argv) {
     bool full_rebuild = false;
     bool include_drafts = false;
     int jobs = 0;
+    std::string env = "development";
     auto* build_cmd = app.add_subcommand("build", "Build the site");
     build_cmd->add_flag("--full", full_rebuild, "Force a clean rebuild (ignore cache)");
     build_cmd->add_flag("--drafts", include_drafts, "Include draft pages in output");
     build_cmd->add_option("-j,--jobs", jobs, "Number of parallel render threads (0 = auto)")->default_val(0);
-    build_cmd->callback([&full_rebuild, &include_drafts, &jobs]() { std::exit(cmd_build(full_rebuild, include_drafts, jobs)); });
+    build_cmd->add_option("-e,--env", env, "Build environment (e.g. production)")->default_val("development");
+    build_cmd->callback([&full_rebuild, &include_drafts, &jobs, &env]() { std::exit(cmd_build(full_rebuild, include_drafts, jobs, env)); });
 
     // serve subcommand
     int port = 3000;
     bool serve_include_drafts = false;
+    std::string serve_env = "development";
     auto* serve_cmd = app.add_subcommand("serve", "Start dev server with live reload");
     serve_cmd->add_option("--port", port, "Port to serve on")->default_val(3000);
     serve_cmd->add_flag("--drafts", serve_include_drafts, "Include draft pages in output");
-    serve_cmd->callback([&port, &serve_include_drafts]() { std::exit(cmd_serve(port, serve_include_drafts)); });
+    serve_cmd->add_option("-e,--env", serve_env, "Build environment (e.g. production)")->default_val("development");
+    serve_cmd->callback([&port, &serve_include_drafts, &serve_env]() { std::exit(cmd_serve(port, serve_include_drafts, serve_env)); });
 
     app.require_subcommand(1);
 
@@ -64,6 +72,61 @@ static void print_created(const std::string& path) {
     std::cout << "  " << colorize(color::green, "created") << "  " << path << "\n";
 }
 
+// Format a BuildError for the error summary.
+// For template errors with a line number and a resolvable template file,
+// includes ±3 lines of source context with a '>' marker.
+static std::string format_build_error(const cstatic::BuildError& err,
+                                       const std::string& template_dir) {
+    std::ostringstream out;
+
+    const char* type_str = "error";
+    switch (err.type) {
+        case cstatic::BuildError::Type::Template:    type_str = "template"; break;
+        case cstatic::BuildError::Type::Frontmatter: type_str = "frontmatter"; break;
+        case cstatic::BuildError::Type::Markdown:    type_str = "markdown"; break;
+        default: break;
+    }
+
+    if (!err.source_file.empty()) {
+        out << err.source_file;
+    }
+
+    if (!err.template_name.empty()) {
+        out << ": " << type_str << " '" << err.template_name << "'";
+        if (err.line > 0) {
+            std::string tmpl_path = cstatic::utils::path_join(template_dir, err.template_name + ".html");
+            out << " (" << tmpl_path << ":" << err.line << ")";
+        }
+    } else {
+        out << ": " << type_str << " error";
+    }
+
+    out << "\n    " << err.message;
+
+    // Context lines for template errors with line info
+    if (err.line > 0 && !err.template_name.empty()) {
+        std::string tmpl_path = cstatic::utils::path_join(template_dir, err.template_name + ".html");
+        std::ifstream f(tmpl_path);
+        if (f.is_open()) {
+            std::vector<std::string> lines;
+            std::string line;
+            while (std::getline(f, line)) {
+                lines.push_back(line);
+            }
+            int target = err.line;
+            int start_line = std::max(1, target - 3);
+            int end_line = std::min(static_cast<int>(lines.size()), target + 3);
+            for (int l = start_line; l <= end_line; l++) {
+                const char* marker = (l == target) ? ">" : " ";
+                out << "\n    " << marker << " " << l << " | "
+                    << (l <= static_cast<int>(lines.size()) ? lines[l - 1] : "");
+            }
+        }
+    }
+
+    return out.str();
+}
+
 int cmd_init() {
     // Check if config.toml already exists
     if (fs::exists("config.toml")) {
@@ -76,7 +139,9 @@ int cmd_init() {
 
     // Create directories
     fs::create_directories("src");
+    fs::create_directories("src/posts");
     fs::create_directories("templates");
+    fs::create_directories("templates/partials");
     fs::create_directories("static/css");
     fs::create_directories("static/js");
 
@@ -102,11 +167,28 @@ hash_file = ".cstatic_cache/hashes.json"
 [build.minify]
 css = true
 js = true
+html = true
+
+[build.highlight]
+enabled = true
+style = "github"
 
 [modules]
 sitemap = true
 rss = false
 robots = false
+
+[[collection]]
+name = "posts"
+template = "post"
+index_template = "posts-index"
+sort_by = "date"
+sort_order = "desc"
+
+[[taxonomy]]
+key = "tags"
+template = "tag"
+index_template = "tags"
 )";
 
     // src/index.md
@@ -146,7 +228,9 @@ This is the about page. Replace this content with your own.
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{ page.title }} — {{ site.title }}</title>
+  {{ seo_meta }}
   <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/highlight.css">
 </head>
 <body>
   <nav>
@@ -190,12 +274,149 @@ footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; color:
     // static/js/app.js
     const char* app_js = "// Add your JavaScript here.\n";
 
+    // templates/partials/nav.html
+    const char* nav_html = R"(<nav>
+  <a href="/">{{ site.title }}</a>
+  {% for p in pages %}
+  <a href="{{ p.url }}">{{ p.title }}</a>
+  {% endfor %}
+</nav>
+)";
+
+    // src/posts/first-post.md
+    const char* first_post_md = R"(---
+title: My First Post
+date: "2025-01-15"
+tags: [getting-started]
+---
+
+# My First Post
+
+Welcome to your blog! This is your first post. Edit or delete it, then run `cstatic build` to see the result.
+)";
+
+    // templates/post.html
+    const char* post_html = R"(<!DOCTYPE html>
+<html lang="{{ site.language }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ page.title }} — {{ site.title }}</title>
+  {{ seo_meta }}
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/highlight.css">
+</head>
+<body>
+  <nav>
+    <a href="/">{{ site.title }}</a>
+  </nav>
+  <article>
+    {{ page.content }}
+  </article>
+  <footer>
+    <p>Built with <a href="https://github.com/daveviamedia-code/cstatic">C-Static</a></p>
+  </footer>
+</body>
+</html>
+)";
+
+    // templates/posts-index.html
+    const char* posts_index_html = R"(<!DOCTYPE html>
+<html lang="{{ site.language }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Posts — {{ site.title }}</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <nav>
+    <a href="/">{{ site.title }}</a>
+  </nav>
+  <main>
+    <h1>Posts</h1>
+    <ul>
+    {% for p in collection.pages %}
+      <li><a href="{{ p.url }}">{{ p.title }}</a></li>
+    {% endfor %}
+    </ul>
+  </main>
+  <footer>
+    <p>Built with <a href="https://github.com/daveviamedia-code/cstatic">C-Static</a></p>
+  </footer>
+</body>
+</html>
+)";
+
+    // templates/tag.html
+    const char* tag_html = R"(<!DOCTYPE html>
+<html lang="{{ site.language }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tag: {{ taxonomy.term }} — {{ site.title }}</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <nav>
+    <a href="/">{{ site.title }}</a>
+  </nav>
+  <main>
+    <h1>Tagged: {{ taxonomy.term }}</h1>
+    <ul>
+    {% for p in taxonomy.pages %}
+      <li><a href="{{ p.url }}">{{ p.title }}</a></li>
+    {% endfor %}
+    </ul>
+    <p><a href="/tags/">All tags</a></p>
+  </main>
+  <footer>
+    <p>Built with <a href="https://github.com/daveviamedia-code/cstatic">C-Static</a></p>
+  </footer>
+</body>
+</html>
+)";
+
+    // templates/tags.html
+    const char* tags_html = R"(<!DOCTYPE html>
+<html lang="{{ site.language }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tags — {{ site.title }}</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <nav>
+    <a href="/">{{ site.title }}</a>
+  </nav>
+  <main>
+    <h1>Tags</h1>
+    <ul>
+    {% for t in taxonomy.terms %}
+      <li><a href="{{ t.url }}">{{ t.term }}</a> ({{ t.count }})</li>
+    {% endfor %}
+    </ul>
+  </main>
+  <footer>
+    <p>Built with <a href="https://github.com/daveviamedia-code/cstatic">C-Static</a></p>
+  </footer>
+</body>
+</html>
+)";
+
     // Write all files
     struct { const char* path; const char* content; } files[] = {
         {"config.toml",              config_toml},
         {"src/index.md",             index_md},
         {"src/about.md",             about_md},
+        {"src/posts/first-post.md",  first_post_md},
         {"templates/default.html",   default_html},
+        {"templates/post.html",      post_html},
+        {"templates/posts-index.html", posts_index_html},
+        {"templates/tag.html",       tag_html},
+        {"templates/tags.html",      tags_html},
+        {"templates/partials/nav.html", nav_html},
         {"static/css/style.css",     style_css},
         {"static/js/app.js",         app_js},
     };
@@ -217,11 +438,23 @@ footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; color:
     return 0;
 }
 
-int cmd_build(bool full_rebuild, bool include_drafts, int jobs) {
+int cmd_build(bool full_rebuild, bool include_drafts, int jobs, const std::string& env) {
     try {
-        cstatic::Config cfg = cstatic::load_config("config.toml");
+        cstatic::Config cfg = cstatic::load_config("config.toml", env);
 
         auto result = cstatic::build_site(cfg, full_rebuild, include_drafts, jobs);
+
+        // If errors were collected, print a numbered summary and exit 1
+        if (!result.errors.empty()) {
+            std::cerr << error_label() << " Build failed with "
+                      << result.errors.size() << " error(s):\n\n";
+            for (size_t i = 0; i < result.errors.size(); i++) {
+                std::cerr << colorize(color::bold, "  " + std::to_string(i + 1) + ". ")
+                          << format_build_error(result.errors[i], cfg.template_dir)
+                          << "\n\n";
+            }
+            return 1;
+        }
 
         // Build stats in green
         if (result.pages_cached > 0) {
@@ -280,9 +513,9 @@ int cmd_build(bool full_rebuild, bool include_drafts, int jobs) {
     }
 }
 
-int cmd_serve(int port, bool include_drafts) {
+int cmd_serve(int port, bool include_drafts, const std::string& env) {
     try {
-        cstatic::Config cfg = cstatic::load_config("config.toml");
+        cstatic::Config cfg = cstatic::load_config("config.toml", env);
 
         // Run an initial build before serving
         auto result = cstatic::build_site(cfg, false, include_drafts);

@@ -280,6 +280,54 @@ extensions = ["table", "tasklist"]
 
 ---
 
+## `[og_images]` — Open Graph Image Generation
+
+Generate a social-card image per page by rendering an Inja SVG template, then (optionally) converting it to PNG. The generated image URL is injected into the page's `{{ seo_meta }}` `og:image` tag (when the page has no explicit `image` frontmatter), into `sitemap.xml`, and into the RSS feed.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `enabled` | bool | `false` | Generate OG images for every page with a non-empty title |
+| `template` | string | `"og-default"` | SVG template name (without `.svg`), loaded from the template directory |
+| `output_format` | string | `"png"` | Output format: `"png"` (requires a converter) or `"svg"` |
+| `width` | int | `1200` | PNG width in pixels (used by the converter) |
+| `height` | int | `630` | PNG height in pixels (used by the converter) |
+| `output_dir` | string | `"og"` | Subdirectory under `output/` where images are written |
+
+```toml
+[og_images]
+enabled = true
+template = "og-default"
+output_format = "png"
+width = 1200
+height = 630
+output_dir = "og"
+```
+
+### How It Works
+
+1. For each page with a non-empty `title`, C-Static renders `templates/<template>.svg` with Inja, receiving `{{ page.title }}`, `{{ page.date }}`, `{{ page.excerpt }}`, `{{ page.url }}`, `{{ site.title }}`, and `{{ site.base_url }}`.
+2. The rendered SVG is always written to `output/<output_dir>/<slug>.svg`.
+3. When `output_format = "png"` and a converter is available, a PNG is written alongside it and the `og:image` URL points to the `.png`. Otherwise the SVG is used directly.
+4. Text values are XML-escaped so the SVG stays well-formed.
+
+The `<slug>` is derived from the page URL: leading/trailing slashes are stripped, internal slashes become hyphens (e.g. `/posts/hello/` → `posts-hello`; `/` → `index`).
+
+### SVG→PNG Converters
+
+PNG output requires one of these tools on your `PATH` (checked in this order):
+
+- **rsvg-convert** — `brew install librsvg` (macOS) / `apt install librsvg2-bin` (Ubuntu)
+- **convert** (ImageMagick) — `brew install imagemagick` / `apt install imagemagick`
+- **inkscape** — `brew install --cask inkscape` / `apt install inkscape`
+
+If none is found, C-Static prints a one-time notice and writes SVG images instead (which work as `og:image` on most platforms).
+
+### Customizing the Template
+
+A default `templates/og-default.svg` (1200×630) is scaffolded by `cstatic init`. SVG `<text>` does not wrap automatically — for long titles, use multiple `<tspan>` lines or shorten titles in frontmatter.
+
+---
+
 ## `[modules]` — Built-in Modules
 
 | Key | Type | Default | Description |

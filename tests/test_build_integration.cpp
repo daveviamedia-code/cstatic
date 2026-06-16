@@ -6,6 +6,7 @@
 
 #include "config/config.hpp"
 #include "pipeline/builder.hpp"
+#include "modules/og_images.hpp"
 #include "utils/file_io.hpp"
 
 namespace fs = std::filesystem;
@@ -829,4 +830,79 @@ TEST_CASE_METHOD(BuildFixture, "Sitemap: includes changefreq and priority", "[in
     std::string xml = read_output("sitemap.xml");
     REQUIRE(xml.find("<changefreq>monthly</changefreq>") != std::string::npos);
     REQUIRE(xml.find("<priority>0.8</priority>") != std::string::npos);
+}
+
+// --- OG Image Tests ---
+
+TEST_CASE_METHOD(BuildFixture, "OG Images: generates SVG and injects og:image meta", "[integration][og]") {
+    write_source("index.md", "---\ntitle: Home Page\n---\nHome.\n");
+    write_source("posts/hello.md", "---\ntitle: Hello Post\ndate: 2024-01-01\n---\nHello.\n");
+    write_template("default.html",
+        "<html><head><title>{{ page.title }}</title>{{ seo_meta }}</head>"
+        "<body>{{ page.content }}</body></html>");
+    write_template("og-default.svg",
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1200\" height=\"630\">"
+        "<text x=\"10\" y=\"100\">{{ page.title }}</text>"
+        "<text x=\"10\" y=\"200\">{{ site.title }}</text>"
+        "</svg>");
+
+    auto cfg = make_config();
+    cfg.og_images_enabled = true;
+    cfg.og_images_output_format = "svg";  // avoid converter dependency
+    cfg.minify_html = false;
+
+    auto result = build_site(cfg, true);
+    REQUIRE(result.errors.empty());
+
+    // SVG files generated for titled pages
+    REQUIRE(output_exists("og/index.svg"));           // "/" -> slug "index"
+    REQUIRE(output_exists("og/posts-hello.svg"));     // "/posts/hello/" -> slug "posts-hello"
+
+    // SVG content rendered with page context
+    std::string home_svg = read_output("og/index.svg");
+    REQUIRE(home_svg.find("Home Page") != std::string::npos);
+    REQUIRE(home_svg.find("Test Site") != std::string::npos);
+
+    // og:image meta injected into rendered HTML (proves og_image propagated via pages_array)
+    std::string html = read_output("index.html");
+    REQUIRE(html.find("og:image") != std::string::npos);
+    REQUIRE(html.find("/og/index.svg") != std::string::npos);
+}
+
+TEST_CASE_METHOD(BuildFixture, "OG Images: module skips pages without titles", "[integration][og]") {
+    write_template("og-default.svg",
+        "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>{{ page.title }}</text></svg>");
+
+    // Markdown titles always fall back to the filename stem, so exercise the skip
+    // logic directly against the module with an explicitly untitled page.
+    nlohmann::json pages = nlohmann::json::array();
+    pages.push_back(nlohmann::json{{"title", "Titled"}, {"url", "/titled/"}});
+    pages.push_back(nlohmann::json{{"url", "/untitled/"}});  // no title field
+
+    Config cfg = make_config();
+    cfg.og_images_enabled = true;
+    cfg.og_images_output_format = "svg";
+
+    int count = cstatic::modules::generate_og_images(cfg, pages,
+        root_dir + "/output", root_dir + "/templates");
+    REQUIRE(count == 1);
+
+    // Titled page gets an image + og_image URL; untitled page is skipped
+    REQUIRE(output_exists("og/titled.svg"));
+    REQUIRE_FALSE(output_exists("og/untitled.svg"));
+    REQUIRE(pages[0].value("og_image", "") == "/og/titled.svg");
+    REQUIRE(pages[1].value("og_image", "") == "");
+}
+
+TEST_CASE_METHOD(BuildFixture, "OG Images: disabled by default produces no og dir", "[integration][og]") {
+    write_source("index.md", "---\ntitle: Home\n---\nHome.\n");
+    write_template("default.html",
+        "<html><body>{{ page.content }}</body></html>");
+
+    auto cfg = make_config();
+    // og_images_enabled defaults to false
+    build_site(cfg, true);
+
+    REQUIRE_FALSE(output_exists("og/index.svg"));
+    REQUIRE_FALSE(fs::exists(root_dir + "/output/og"));
 }

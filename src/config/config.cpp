@@ -242,6 +242,14 @@ Config load_config(const std::string& path, const std::string& env) {
     // --- [build.markdown] ---
     cfg.markdown_extensions = optional_string_array(tbl, "build.markdown.extensions");
 
+    // --- [og_images] ---
+    cfg.og_images_enabled       = optional_bool(tbl,   "og_images.enabled",       cfg.og_images_enabled);
+    cfg.og_images_template      = optional_string(tbl, "og_images.template",      cfg.og_images_template);
+    cfg.og_images_output_format = optional_string(tbl, "og_images.output_format", cfg.og_images_output_format);
+    cfg.og_images_width         = optional_int(tbl,    "og_images.width",         cfg.og_images_width);
+    cfg.og_images_height        = optional_int(tbl,    "og_images.height",        cfg.og_images_height);
+    cfg.og_images_output_dir    = optional_string(tbl, "og_images.output_dir",    cfg.og_images_output_dir);
+
     // --- [modules] ---
     cfg.module_sitemap = optional_bool(tbl, "modules.sitemap", cfg.module_sitemap);
     cfg.module_rss     = optional_bool(tbl, "modules.rss",     cfg.module_rss);
@@ -364,6 +372,13 @@ std::string config_to_json(const Config& cfg) {
     j["build"]["highlight"]["style"]   = cfg.highlight_style;
 
     j["build"]["markdown"]["extensions"] = cfg.markdown_extensions;
+
+    j["og_images"]["enabled"]       = cfg.og_images_enabled;
+    j["og_images"]["template"]      = cfg.og_images_template;
+    j["og_images"]["output_format"] = cfg.og_images_output_format;
+    j["og_images"]["width"]         = cfg.og_images_width;
+    j["og_images"]["height"]        = cfg.og_images_height;
+    j["og_images"]["output_dir"]    = cfg.og_images_output_dir;
 
     j["modules"]["sitemap"] = cfg.module_sitemap;
     j["modules"]["rss"]     = cfg.module_rss;

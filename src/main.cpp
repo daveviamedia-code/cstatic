@@ -405,6 +405,24 @@ Welcome to your blog! This is your first post. Edit or delete it, then run `csta
 </html>
 )";
 
+    // templates/og-default.svg — Open Graph image template (1200x630).
+    // Rendered per-page with {{ page.title }}, {{ page.date }}, {{ site.title }}.
+    // Enable via [og_images] enabled = true in config.toml.
+    const char* og_default_svg = R"SVG(<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#1e293b"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect x="0" y="0" width="1200" height="10" fill="#3b82f6"/>
+  <text x="80" y="300" font-family="Georgia, 'Times New Roman', serif" font-size="68" font-weight="bold" fill="#f8fafc">{{ page.title }}</text>
+  <text x="80" y="380" font-family="-apple-system, 'Segoe UI', Roboto, sans-serif" font-size="30" fill="#64748b">{{ page.date }}</text>
+  <text x="80" y="560" font-family="-apple-system, 'Segoe UI', Roboto, sans-serif" font-size="32" fill="#94a3b8">{{ site.title }}</text>
+</svg>
+)SVG";
+
     // Write all files
     struct { const char* path; const char* content; } files[] = {
         {"config.toml",              config_toml},
@@ -417,6 +435,7 @@ Welcome to your blog! This is your first post. Edit or delete it, then run `csta
         {"templates/tag.html",       tag_html},
         {"templates/tags.html",      tags_html},
         {"templates/partials/nav.html", nav_html},
+        {"templates/og-default.svg", og_default_svg},
         {"static/css/style.css",     style_css},
         {"static/js/app.js",         app_js},
     };

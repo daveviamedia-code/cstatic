@@ -58,6 +58,14 @@ struct Config {
     // strikethrough, autolink). Otherwise only the listed extensions are on.
     std::vector<std::string> markdown_extensions;
 
+    // [og_images]
+    bool        og_images_enabled       = false;
+    std::string og_images_template      = "og-default";   // SVG template name (no .svg)
+    std::string og_images_output_format = "png";          // "png" or "svg"
+    int         og_images_width         = 1200;
+    int         og_images_height        = 630;
+    std::string og_images_output_dir    = "og";           // subdir under output/
+
     // [modules]
     bool module_sitemap = true;
     bool module_rss     = false;

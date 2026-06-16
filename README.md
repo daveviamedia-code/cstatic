@@ -16,6 +16,7 @@ A fast, minimal static site generator written in C++17.
 - **Build profiles** — Per-environment config overlays via `--env` (e.g. `config.production.toml`) with `{{ site.env }}` template variable
 - **Page aliases** — Frontmatter `aliases` array generates HTML redirect pages at old URLs, included in sitemap
 - **SEO meta tags** — Automatic Open Graph, Twitter Card, and canonical link tags via `{{ seo_meta }}` template variable
+- **OG image generation** — Per-page social-card images from Inja SVG templates, converted to PNG via rsvg-convert/ImageMagick/Inkscape
 - **Search index** — Optional client-side search index (`search-index.json`) for Lunr.js/Fuse.js integration
 - **Incremental builds** — Content-hash caching means only changed pages are rebuilt
 - **Asset pipeline** — Built-in CSS/JS minification with incremental support
@@ -60,7 +61,8 @@ This creates:
 │   ├── post.html         # Blog post template
 │   ├── posts-index.html  # Blog index template
 │   ├── tag.html          # Tag listing template
-│   └── tags.html         # Tag index template
+│   ├── tags.html         # Tag index template
+│   └── og-default.svg    # Open Graph image template (1200×630)
 └── static/
     ├── css/style.css     # Minimal reset
     └── js/app.js         # Placeholder

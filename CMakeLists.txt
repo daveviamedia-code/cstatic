@@ -97,6 +97,7 @@ add_executable(cstatic
     src/modules/rss.cpp
     src/modules/robots.cpp
     src/modules/search.cpp
+    src/modules/og_images.cpp
     src/server/dev_server.cpp
     src/stb_impl.cpp
     src/template/renderer.cpp

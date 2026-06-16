@@ -9,6 +9,7 @@
 #include "modules/rss.hpp"
 #include "modules/robots.hpp"
 #include "modules/search.hpp"
+#include "modules/og_images.hpp"
 #include "template/renderer.hpp"
 #include "utils/path.hpp"
 #include "utils/terminal.hpp"
@@ -24,6 +25,7 @@
 #include <regex>
 #include <thread>
 #include <unordered_set>
+#include <unordered_map>
 #include <map>
 
 namespace cstatic {
@@ -918,6 +920,20 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         }
     }
 
+    // --- OG image URLs (computed before rendering so og:image lands in seo_meta) ---
+    // The image files themselves are written later (after the output-write section)
+    // so the full-rebuild wipe doesn't delete them.
+    std::unordered_map<std::string, std::string> og_image_map;
+    if (cfg.og_images_enabled) {
+        for (auto& p : pages_array) {
+            std::string p_url = p.value("url", "");
+            if (p_url.empty() || p.value("title", "").empty()) continue;
+            std::string og = modules::og_image_url_for(cfg, p_url);
+            p["og_image"] = og;
+            og_image_map[p_url] = og;
+        }
+    }
+
     // --- Phase 2: Render markdown pages, track dependencies, decide what to rebuild ---
 
     // Build task list and pre-load templates
@@ -1029,11 +1045,16 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
             ctx["data"] = all_data;
             ctx["collections"] = collections_json;
 
+            std::string og_image_for_page = rp.parsed.frontmatter.image;
+            if (og_image_for_page.empty()) {
+                auto it = og_image_map.find(rp.url);
+                if (it != og_image_map.end()) og_image_for_page = it->second;
+            }
             ctx["seo_meta"] = build_seo_meta(
                 rp.parsed.frontmatter.title, rp.url,
                 rp.parsed.frontmatter.description,
                 utils::truncate_text(utils::strip_html_tags(rp.html_content), 200),
-                rp.parsed.frontmatter.image, rp.parsed.frontmatter.canonical,
+                og_image_for_page, rp.parsed.frontmatter.canonical,
                 cfg.site_base_url, cfg.site_twitter_handle);
 
             try {
@@ -1365,6 +1386,11 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         result.assets_cached = asset_result.files_cached;
         result.assets_removed = asset_result.files_removed;
         result.bytes_saved = asset_result.bytes_saved;
+    }
+
+    // --- Generate OG image files (after the output wipe + asset pipeline) ---
+    if (cfg.og_images_enabled) {
+        modules::generate_og_images(cfg, pages_array, cfg.output_dir, cfg.template_dir);
     }
 
     // --- Generate built-in modules (sitemap, RSS, robots, 404) ---

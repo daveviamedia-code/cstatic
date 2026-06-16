@@ -20,6 +20,7 @@ set(LIB_SOURCES
     ${CMAKE_SOURCE_DIR}/src/modules/rss.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/robots.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/search.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/og_images.cpp
     ${CMAKE_SOURCE_DIR}/src/stb_impl.cpp
     ${CMAKE_SOURCE_DIR}/src/template/renderer.cpp
     ${CMAKE_SOURCE_DIR}/src/pipeline/builder.cpp

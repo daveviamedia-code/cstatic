@@ -134,7 +134,7 @@ Add `shortcodes/` directory creation to init. Add sample shortcodes: `shortcodes
 
 ---
 
-## Feature 3: `cstatic new` Command
+## Feature 3: `cstatic new` Command ✅ DONE
 
 ### New files
 - **`src/cli/content_generator.hpp`** / **`.cpp`**:

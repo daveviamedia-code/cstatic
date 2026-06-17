@@ -276,6 +276,10 @@ Config load_config(const std::string& path, const std::string& env) {
     cfg.hook_before_build = optional_string(tbl, "hooks.before_build", "");
     cfg.hook_after_build  = optional_string(tbl, "hooks.after_build", "");
 
+    // --- [check] ---
+    cfg.check_external   = optional_bool(tbl, "check.external",    cfg.check_external);
+    cfg.check_timeout_ms = optional_int (tbl, "check.timeout_ms", cfg.check_timeout_ms);
+
     // --- [data] ---
     cfg.data_dir = optional_string(tbl, "data.data_dir", cfg.data_dir);
 
@@ -402,6 +406,9 @@ std::string config_to_json(const Config& cfg) {
 
     j["hooks"]["before_build"] = cfg.hook_before_build;
     j["hooks"]["after_build"]  = cfg.hook_after_build;
+
+    j["check"]["external"]    = cfg.check_external;
+    j["check"]["timeout_ms"]  = cfg.check_timeout_ms;
 
     j["data"]["data_dir"] = cfg.data_dir;
 

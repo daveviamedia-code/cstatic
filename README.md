@@ -20,6 +20,7 @@ A fast, minimal static site generator written in C++17.
 - **OG image generation** — Per-page social-card images from Inja SVG templates, converted to PNG via rsvg-convert/ImageMagick/Inkscape
 - **Content scaffolding** — `cstatic new` creates pages from archetypes (`archetypes/<kind>.md`) with `{{ title }}`, `{{ slug }}`, and `{{ date }}` placeholders
 - **Scheduled publishing** — Pages with a future `date` are automatically skipped until their date arrives (toggle with `build.publish_future`)
+- **Broken link checker** — `cstatic check` scans built output and verifies internal links against the filesystem (and optionally external URLs via HTTP HEAD), exiting non-zero so it can gate CI
 - **Search index** — Optional client-side search index (`search-index.json`) for Lunr.js/Fuse.js integration
 - **Incremental builds** — Content-hash caching means only changed pages are rebuilt
 - **Asset pipeline** — Built-in CSS/JS minification with incremental support
@@ -98,6 +99,8 @@ cstatic serve              # Dev server at http://localhost:3000
 cstatic serve --port 8080  # Custom port
 cstatic build --full       # Force full rebuild (ignores cache)
 cstatic build --env production  # Build with config.production.toml overlay
+cstatic check              # Verify internal links in output/ (exits 1 on broken links)
+cstatic check --external   # Also probe external URLs via HTTP HEAD
 ```
 
 ## Configuration

@@ -750,3 +750,41 @@ cstatic new --kind post posts/launch.md   # uses archetypes/post.md
 
 Placeholder matching tolerates inner whitespace (`{{title}}`, `{{ title }}` both work). The output path is `<source_dir>/<path>` (so `source_dir = "src"` + `posts/x.md` → `src/posts/x.md`). Parent directories are created automatically. Existing files are never overwritten.
 
+---
+
+## `[check]` — Broken Link Verifier
+
+`cstatic check` is a post-build verifier. After `cstatic build`, run it to confirm every internal link in the generated `output/` directory resolves to a real file (and optionally that every external URL is reachable). It exits with code `1` when issues are found, so it can gate CI.
+
+```bash
+cstatic check                 # internal links only
+cstatic check --external      # also probe external URLs via HTTP HEAD
+cstatic check --timeout 3000  # per-external-request timeout in ms
+```
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `external` | bool | `false` | Verify external (`http://` / `https://` / `//host`) links via HTTP HEAD (GET fallback), following redirects. |
+| `timeout_ms` | int | `5000` | Per-request timeout for external checks, in milliseconds. |
+
+```toml
+[check]
+external = true
+timeout_ms = 5000
+```
+
+The `--external` CLI flag overrides `external = false` in config; if either is set, external checks run. `--timeout` overrides `timeout_ms` when greater than `0`.
+
+### URL classification
+
+| URL shape | Handling |
+|-----------|----------|
+| `http://`, `https://`, `//host` | External — skipped unless `external` is on, then probed once per unique URL |
+| Root-relative (`/posts/foo.html`) | Internal — resolved against `output/` and verified |
+| `mailto:`, `tel:`, `sms:`, `data:`, `javascript:` | Skipped |
+| `#fragment` only | Skipped (in-page anchor) |
+| Relative (`other.html`) | Skipped in v1 |
+| Trailing `/` or no extension (`/posts/`) | Resolved to `index.html` |
+
+Fragment (`#…`) and query (`?…`) are stripped before resolving internal links. Transport-level failures (DNS, connection refused, timeout, missing HTTPS support in the binary) are reported as warnings on stderr and do **not** fail the check — only HTTP error statuses (`>= 400`) and missing internal files do.
+

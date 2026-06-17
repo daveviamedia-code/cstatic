@@ -104,6 +104,7 @@ add_executable(cstatic
     src/stb_impl.cpp
     src/template/renderer.cpp
     src/pipeline/builder.cpp
+    src/pipeline/link_checker.cpp
     src/utils/file_io.cpp
     src/utils/path.cpp
 )

@@ -193,7 +193,7 @@ Add `int pages_scheduled = 0;` for accurate reporting (separate from drafts).
 
 ---
 
-## Feature 5: Broken Link Checker (`cstatic check`)
+## Feature 5: Broken Link Checker (`cstatic check`) ✅ DONE
 
 ### New files
 - **`src/pipeline/link_checker.hpp`**:

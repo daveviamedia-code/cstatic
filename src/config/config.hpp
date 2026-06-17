@@ -94,6 +94,10 @@ struct Config {
     std::string hook_before_build;
     std::string hook_after_build;
 
+    // [check] — `cstatic check` broken-link verifier
+    bool check_external   = false;  // also verify external links via HTTP HEAD
+    int  check_timeout_ms = 5000;   // per-request timeout for external checks
+
     // [data]
     std::string data_dir = "_data";
 

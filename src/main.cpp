@@ -8,6 +8,7 @@
 #include "cli/content_generator.hpp"
 #include "config/config.hpp"
 #include "pipeline/builder.hpp"
+#include "pipeline/link_checker.hpp"
 #include "server/dev_server.hpp"
 #include "utils/terminal.hpp"
 #include "utils/path.hpp"
@@ -19,6 +20,7 @@ int cmd_init();
 int cmd_new(const std::string& path, const std::string& kind);
 int cmd_build(bool full_rebuild, bool include_drafts, int jobs, const std::string& env);
 int cmd_serve(int port, bool include_drafts, const std::string& env);
+int cmd_check(bool external_flag, int timeout_ms);
 
 int main(int argc, char** argv) {
     CLI::App app{"C-Static — a high-performance static site generator", "cstatic"};
@@ -58,6 +60,14 @@ int main(int argc, char** argv) {
     serve_cmd->add_flag("--drafts", serve_include_drafts, "Include draft pages in output");
     serve_cmd->add_option("-e,--env", serve_env, "Build environment (e.g. production)")->default_val("development");
     serve_cmd->callback([&port, &serve_include_drafts, &serve_env]() { std::exit(cmd_serve(port, serve_include_drafts, serve_env)); });
+
+    // check subcommand
+    bool check_external_flag = false;
+    int  check_timeout_cli   = 0;
+    auto* check_cmd = app.add_subcommand("check", "Check for broken links in built output");
+    check_cmd->add_flag("--external", check_external_flag, "Also verify external links via HTTP HEAD");
+    check_cmd->add_option("--timeout", check_timeout_cli, "Per-request HTTP timeout in ms (default: config)");
+    check_cmd->callback([&check_external_flag, &check_timeout_cli]() { std::exit(cmd_check(check_external_flag, check_timeout_cli)); });
 
     app.require_subcommand(1);
 
@@ -629,6 +639,52 @@ int cmd_serve(int port, bool include_drafts, const std::string& env) {
         cstatic::DevServer server(cfg, port, include_drafts);
         server.start();
         return 0;
+    } catch (const cstatic::ConfigError& e) {
+        std::cerr << e.what() << "\n";
+        return 1;
+    } catch (const std::runtime_error& e) {
+        std::cerr << error_label() << " " << e.what() << "\n";
+        return 1;
+    } catch (const std::exception& e) {
+        std::cerr << error_label() << " unexpected error: " << e.what() << "\n";
+        return 1;
+    }
+}
+
+int cmd_check(bool external_flag, int timeout_ms_cli) {
+    try {
+        cstatic::Config cfg = cstatic::load_config("config.toml");
+
+        bool do_external = external_flag || cfg.check_external;
+        int  timeout_ms  = (timeout_ms_cli > 0) ? timeout_ms_cli : cfg.check_timeout_ms;
+
+        cstatic::pipeline::CheckResult r =
+            cstatic::pipeline::check_links(cfg.output_dir, do_external, timeout_ms);
+
+        // Per-issue lines. External transport failures were already surfaced
+        // as warnings inside check_links; here we only print counted issues.
+        for (const auto& issue : r.issues) {
+            std::cerr << error_label() << " " << issue.source_file;
+            if (issue.line > 0) std::cerr << ":" << issue.line;
+            std::cerr << "\n    " << colorize(color::bold, issue.href)
+                      << "  " << colorize(color::dim, issue.message) << "\n";
+        }
+
+        // Summary line.
+        std::cout << colorize(color::dim,
+            "Checked " + std::to_string(r.internal_checked) + " internal link(s)");
+        if (do_external) {
+            std::cout << colorize(color::dim,
+                ", " + std::to_string(r.external_checked) + " external URL(s)");
+        }
+        std::cout << "\n";
+
+        if (r.issues.empty()) {
+            std::cout << success_label() << " No broken links found.\n";
+            return 0;
+        }
+        std::cout << error_label() << " Found " << r.issues.size() << " broken link(s).\n";
+        return 1;
     } catch (const cstatic::ConfigError& e) {
         std::cerr << e.what() << "\n";
         return 1;

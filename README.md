@@ -8,6 +8,7 @@ A fast, minimal static site generator written in C++17.
 
 - **Markdown-first** — Write pages in Markdown with YAML frontmatter
 - **GFM extensions** — Tables, task lists, strikethrough, and autolinks via cmark-gfm
+- **Shortcodes** — Reusable content components via `{{< name params >}}` syntax, expanded before the markdown render pass
 - **Syntax highlighting** — Built-in code highlighting for 10+ languages with light/dark themes
 - **Template engine** — Inja-based templates with full context (site, page, data, pagination)
 - **Data-driven pages** — Generate pages from JSON/YAML data sources with pagination and per-item routing
@@ -63,6 +64,10 @@ This creates:
 │   ├── tag.html          # Tag listing template
 │   ├── tags.html         # Tag index template
 │   └── og-default.svg    # Open Graph image template (1200×630)
+├── shortcodes/
+│   ├── youtube.html      # {{< youtube ID >}}
+│   ├── figure.html       # {{< figure src="..." alt="..." >}}
+│   └── note.html         # {{< note >}}...{{< /note >}}
 └── static/
     ├── css/style.css     # Minimal reset
     └── js/app.js         # Placeholder

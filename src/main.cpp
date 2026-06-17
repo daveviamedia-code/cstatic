@@ -144,6 +144,7 @@ int cmd_init() {
     fs::create_directories("templates/partials");
     fs::create_directories("static/css");
     fs::create_directories("static/js");
+    fs::create_directories("shortcodes");
 
     // config.toml
     const char* config_toml = R"(# C-Static Site Configuration
@@ -423,6 +424,33 @@ Welcome to your blog! This is your first post. Edit or delete it, then run `csta
 </svg>
 )SVG";
 
+    // shortcodes/youtube.html — embed a YouTube video by ID.
+    // Usage in markdown: {{< youtube dQw4w9WgXcQ >}}
+    const char* shortcode_youtube_html = R"(<div class="video-embed">
+  <iframe width="560" height="315"
+          src="https://www.youtube.com/embed/{{ params.0 }}"
+          title="YouTube video player"
+          frameborder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowfullscreen></iframe>
+</div>
+)";
+
+    // shortcodes/figure.html — captioned figure with named params.
+    // Usage: {{< figure src="/images/cat.jpg" alt="A cat" caption="Mittens" >}}
+    const char* shortcode_figure_html = R"(<figure>
+  <img src="{{ named.src }}" alt="{{ named.alt }}" {% if named.caption %}aria-describedby="fig-caption"{% endif %}>
+  {% if named.caption %}<figcaption id="fig-caption">{{ named.caption }}</figcaption>{% endif %}
+</figure>
+)";
+
+    // shortcodes/note.html — block shortcode example (callout/admonition).
+    // Usage: {{< note >}}This is important.{{< /note >}}
+    const char* shortcode_note_html = R"(<aside class="note">
+  <strong>Note:</strong> {{ content }}
+</aside>
+)";
+
     // Write all files
     struct { const char* path; const char* content; } files[] = {
         {"config.toml",              config_toml},
@@ -436,6 +464,9 @@ Welcome to your blog! This is your first post. Edit or delete it, then run `csta
         {"templates/tags.html",      tags_html},
         {"templates/partials/nav.html", nav_html},
         {"templates/og-default.svg", og_default_svg},
+        {"shortcodes/youtube.html",  shortcode_youtube_html},
+        {"shortcodes/figure.html",   shortcode_figure_html},
+        {"shortcodes/note.html",     shortcode_note_html},
         {"static/css/style.css",     style_css},
         {"static/js/app.js",         app_js},
     };

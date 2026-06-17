@@ -14,6 +14,7 @@ set(LIB_SOURCES
     ${CMAKE_SOURCE_DIR}/src/config/config.cpp
     ${CMAKE_SOURCE_DIR}/src/content/frontmatter.cpp
     ${CMAKE_SOURCE_DIR}/src/content/markdown.cpp
+    ${CMAKE_SOURCE_DIR}/src/content/shortcodes.cpp
     ${CMAKE_SOURCE_DIR}/src/data/data_loader.cpp
     ${CMAKE_SOURCE_DIR}/src/hash/hash_store.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/sitemap.cpp
@@ -39,6 +40,7 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/tests/test_minifier.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_data_loader.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_build_integration.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_shortcodes.cpp
 )
 
 add_executable(cstatic_tests ${TEST_SOURCES} ${LIB_SOURCES})

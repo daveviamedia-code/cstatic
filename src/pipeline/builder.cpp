@@ -3,6 +3,7 @@
 #include "config/config.hpp"
 #include "content/frontmatter.hpp"
 #include "content/markdown.hpp"
+#include "content/shortcodes.hpp"
 #include "data/data_loader.hpp"
 #include "hash/hash_store.hpp"
 #include "modules/sitemap.hpp"
@@ -452,6 +453,13 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         hashes.hash_file(f);
     }
 
+    // Shortcode templates — changes here must invalidate dependent pages.
+    if (!cfg.shortcodes_dir.empty()) {
+        for (const auto& f : collect_files(cfg.shortcodes_dir, ".html")) {
+            hashes.hash_file(f);
+        }
+    }
+
     // --- Load data ---
     DataLoader data_loader(cfg.data_dir);
     nlohmann::json all_data = data_loader.load_all();
@@ -479,6 +487,10 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
     md_opts.highlight_enabled = cfg.highlight_enabled;
     md_opts.highlight_style   = cfg.highlight_style;
     md_opts.extensions        = cfg.markdown_extensions;
+
+    // Shortcode processor — no-op when the shortcodes directory is empty or
+    // missing (see ShortcodeProcessor::available()).
+    ShortcodeProcessor shortcode_processor(cfg.shortcodes_dir);
 
     // --- Phase 1: Parse all markdown pages ---
     struct RawPage {
@@ -537,14 +549,9 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         } else {
             rp.output_path = utils::url_to_output(rp.url, cfg.output_dir);
         }
-        try {
-            rp.html_content = render_markdown(rp.parsed.body, md_opts);
-        } catch (const std::exception& e) {
-            result.errors.push_back({BuildError::Type::Markdown, file_path,
-                                     "", 0, e.what()});
-            continue;
-        }
 
+        // Resolve title (with filename fallback) before rendering — shortcodes
+        // may reference {{ page.title }} during body expansion.
         std::string title = rp.parsed.frontmatter.title;
         if (title.empty()) {
             auto fname = fs::path(file_path).stem().string();
@@ -556,6 +563,28 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
             }
             if (!fname.empty()) fname[0] = std::toupper(fname[0]);
             title = fname;
+        }
+
+        // Expand shortcodes ({{< name params >}} / {{< name >}}...{{< /name >}})
+        // before cmark-gfm. CMARK_OPT_UNSAFE lets the emitted raw HTML pass
+        // through to the final document.
+        std::string body = rp.parsed.body;
+        if (shortcode_processor.available()) {
+            nlohmann::json page_ctx;
+            page_ctx["title"] = title;
+            page_ctx["url"]   = rp.url;
+            page_ctx["slug"]  = fs::path(file_path).stem().string();
+            if (!rp.parsed.frontmatter.date.empty())
+                page_ctx["date"] = rp.parsed.frontmatter.date;
+            body = shortcode_processor.process(body, page_ctx);
+        }
+
+        try {
+            rp.html_content = render_markdown(body, md_opts);
+        } catch (const std::exception& e) {
+            result.errors.push_back({BuildError::Type::Markdown, file_path,
+                                     "", 0, e.what()});
+            continue;
         }
 
         // Resolve template path
@@ -936,6 +965,14 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
 
     // --- Phase 2: Render markdown pages, track dependencies, decide what to rebuild ---
 
+    // Shortcode template paths — every rendered page depends on them so a
+    // template change invalidates the whole site. (Coarse but simple: the
+    // hash store dedups, and most sites have only a handful of shortcodes.)
+    std::vector<std::string> shortcode_deps;
+    if (shortcode_processor.available()) {
+        shortcode_deps = collect_files(cfg.shortcodes_dir, ".html");
+    }
+
     // Build task list and pre-load templates
     struct RenderTask {
         size_t index;
@@ -950,6 +987,7 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         if (!rp.template_path.empty()) {
             deps.push_back(rp.template_path);
         }
+        deps.insert(deps.end(), shortcode_deps.begin(), shortcode_deps.end());
 
         bool needs_rebuild = true;
         if (incremental) {
@@ -1099,6 +1137,7 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         if (!rp.template_path.empty()) {
             deps.push_back(rp.template_path);
         }
+        deps.insert(deps.end(), shortcode_deps.begin(), shortcode_deps.end());
 
         if (tasks[i].needs_rebuild) {
             if (was_rendered[render_idx]) {

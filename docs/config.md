@@ -261,6 +261,7 @@ JavaScript/TypeScript (`js`, `javascript`, `ts`), Python (`py`, `python`), C/C++
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `extensions` | string[] | all enabled | Subset of GFM extensions to enable |
+| `shortcodes_dir` | string | `"shortcodes"` | Directory containing shortcode templates (relative to project root) |
 
 C-Static uses [cmark-gfm](https://github.com/github/cmark-gfm) for rendering, which supports GitHub-Flavored Markdown extensions. By default all four are enabled. To enable only a subset:
 
@@ -277,6 +278,27 @@ extensions = ["table", "tasklist"]
 | `tasklist` | `- [x]` / `- [ ]` | Checkboxes in list items |
 | `strikethrough` | `~~text~~` | `<del>text</del>` |
 | `autolink` | Bare URLs | `<a>` tags auto-linked |
+
+### Shortcodes
+
+Shortcodes are reusable content components invoked from markdown via `{{< name params >}}`. They expand to HTML **before** the cmark-gfm render pass, so the emitted HTML passes through (`CMARK_OPT_UNSAFE` is enabled). Templates live in the `shortcodes_dir` (default `shortcodes/`) as `<name>.html` files rendered with [Inja](https://github.com/pantor/inja).
+
+**Inline shortcodes** take positional args (`{{ params.0 }}`, `{{ params.1 }}`) and named args (`{{ named.src }}`):
+
+```markdown
+{{< youtube dQw4w9WgXcQ >}}
+{{< figure src="/img/cat.jpg" alt="A cat" caption="Mittens" >}}
+```
+
+**Block shortcodes** wrap inner content (available as `{{ content }}`). With no params, the opener is treated as a block start; a matching `{{< /name >}}` closes it. Same-name blocks nest correctly:
+
+```markdown
+{{< note >}}
+This is **important** text rendered inside the shortcode.
+{{< /note >}}
+```
+
+The render context exposes `params` (positional array), `named` (object), `content` (block inner HTML), and `page` (current page's `title`, `url`, `slug`, `date`). An unknown shortcode prints a notice on stderr and expands to nothing. Shortcodes are disabled automatically when the directory is empty or missing.
 
 ---
 

@@ -91,6 +91,7 @@ add_executable(cstatic
     src/config/config.cpp
     src/content/frontmatter.cpp
     src/content/markdown.cpp
+    src/content/shortcodes.cpp
     src/data/data_loader.cpp
     src/hash/hash_store.cpp
     src/modules/sitemap.cpp

@@ -83,7 +83,7 @@ Add `templates/og-default.svg` to init scaffold `files[]` array (~line 409). Def
 
 ---
 
-## Feature 2: Shortcodes / Content Components
+## Feature 2: Shortcodes / Content Components ✅ DONE
 
 **Approach**: Pre-process `{{< name params >}}` syntax in markdown body before cmark-gfm rendering. Shortcode templates are Inja templates in `shortcodes/` directory. Since `CMARK_OPT_UNSAFE` is enabled (`markdown.cpp:487`), raw HTML from shortcodes passes through.
 

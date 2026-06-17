@@ -58,6 +58,11 @@ struct Config {
     // strikethrough, autolink). Otherwise only the listed extensions are on.
     std::vector<std::string> markdown_extensions;
 
+    // [build.markdown.shortcodes]
+    // Directory (relative to project root) containing shortcode templates.
+    // Empty = shortcodes disabled. Default "shortcodes" matches the scaffold.
+    std::string shortcodes_dir = "shortcodes";
+
     // [og_images]
     bool        og_images_enabled       = false;
     std::string og_images_template      = "og-default";   // SVG template name (no .svg)

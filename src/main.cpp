@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "cli/content_generator.hpp"
 #include "config/config.hpp"
 #include "pipeline/builder.hpp"
 #include "server/dev_server.hpp"
@@ -15,6 +16,7 @@ namespace fs = std::filesystem;
 using namespace cstatic::utils;
 
 int cmd_init();
+int cmd_new(const std::string& path, const std::string& kind);
 int cmd_build(bool full_rebuild, bool include_drafts, int jobs, const std::string& env);
 int cmd_serve(int port, bool include_drafts, const std::string& env);
 
@@ -27,6 +29,13 @@ int main(int argc, char** argv) {
     // init subcommand
     auto* init_cmd = app.add_subcommand("init", "Scaffold a new project");
     init_cmd->callback([]() { std::exit(cmd_init()); });
+
+    // new subcommand — create content from an archetype
+    std::string new_path, new_kind;
+    auto* new_cmd = app.add_subcommand("new", "Create new content from an archetype");
+    new_cmd->add_option("path", new_path, "Content path (e.g. posts/my-post.md)")->required();
+    new_cmd->add_option("--kind", new_kind, "Archetype name (default: 'default')");
+    new_cmd->callback([&new_path, &new_kind]() { std::exit(cmd_new(new_path, new_kind)); });
 
     // build subcommand
     bool full_rebuild = false;
@@ -145,6 +154,7 @@ int cmd_init() {
     fs::create_directories("static/css");
     fs::create_directories("static/js");
     fs::create_directories("shortcodes");
+    fs::create_directories("archetypes");
 
     // config.toml
     const char* config_toml = R"(# C-Static Site Configuration
@@ -451,6 +461,28 @@ Welcome to your blog! This is your first post. Edit or delete it, then run `csta
 </aside>
 )";
 
+    // archetypes/default.md — fallback template for `cstatic new`.
+    // Placeholders {{ title }}, {{ date }}, {{ slug }} are substituted.
+    const char* archetype_default_md = R"(---
+title: "{{ title }}"
+date: "{{ date }}"
+---
+
+# {{ title }}
+)";
+
+    // archetypes/post.md — used with `cstatic new --kind post posts/x.md`.
+    // New posts start as drafts so they don't ship until ready.
+    const char* archetype_post_md = R"(---
+title: "{{ title }}"
+date: "{{ date }}"
+tags: []
+draft: true
+---
+
+# {{ title }}
+)";
+
     // Write all files
     struct { const char* path; const char* content; } files[] = {
         {"config.toml",              config_toml},
@@ -467,6 +499,8 @@ Welcome to your blog! This is your first post. Edit or delete it, then run `csta
         {"shortcodes/youtube.html",  shortcode_youtube_html},
         {"shortcodes/figure.html",   shortcode_figure_html},
         {"shortcodes/note.html",     shortcode_note_html},
+        {"archetypes/default.md",    archetype_default_md},
+        {"archetypes/post.md",       archetype_post_md},
         {"static/css/style.css",     style_css},
         {"static/js/app.js",         app_js},
     };
@@ -486,6 +520,21 @@ Welcome to your blog! This is your first post. Edit or delete it, then run `csta
               << "  3. Run " << colorize(color::cyan, "cstatic build") << " to generate the output\n";
 
     return 0;
+}
+
+int cmd_new(const std::string& path, const std::string& kind) {
+    cstatic::Config cfg;
+    try {
+        cfg = cstatic::load_config("config.toml");
+    } catch (const cstatic::ConfigError& e) {
+        std::cerr << e.what() << "\n";
+        return 1;
+    } catch (const std::exception& e) {
+        std::cerr << error_label() << " " << e.what() << "\n";
+        return 1;
+    }
+    std::string target = path_join(cfg.source_dir, path);
+    return cstatic::cli::generate_content(target, "archetypes", kind);
 }
 
 int cmd_build(bool full_rebuild, bool include_drafts, int jobs, const std::string& env) {

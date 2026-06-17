@@ -11,6 +11,7 @@ FetchContent_MakeAvailable(Catch2)
 # Library source files (everything except main.cpp)
 set(LIB_SOURCES
     ${CMAKE_SOURCE_DIR}/src/assets/asset_pipeline.cpp
+    ${CMAKE_SOURCE_DIR}/src/cli/content_generator.cpp
     ${CMAKE_SOURCE_DIR}/src/config/config.cpp
     ${CMAKE_SOURCE_DIR}/src/content/frontmatter.cpp
     ${CMAKE_SOURCE_DIR}/src/content/markdown.cpp
@@ -41,6 +42,7 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/tests/test_data_loader.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_build_integration.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_shortcodes.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_content_generator.cpp
 )
 
 add_executable(cstatic_tests ${TEST_SOURCES} ${LIB_SOURCES})

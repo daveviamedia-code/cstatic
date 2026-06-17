@@ -18,6 +18,7 @@ A fast, minimal static site generator written in C++17.
 - **Page aliases** — Frontmatter `aliases` array generates HTML redirect pages at old URLs, included in sitemap
 - **SEO meta tags** — Automatic Open Graph, Twitter Card, and canonical link tags via `{{ seo_meta }}` template variable
 - **OG image generation** — Per-page social-card images from Inja SVG templates, converted to PNG via rsvg-convert/ImageMagick/Inkscape
+- **Content scaffolding** — `cstatic new` creates pages from archetypes (`archetypes/<kind>.md`) with `{{ title }}`, `{{ slug }}`, and `{{ date }}` placeholders
 - **Search index** — Optional client-side search index (`search-index.json`) for Lunr.js/Fuse.js integration
 - **Incremental builds** — Content-hash caching means only changed pages are rebuilt
 - **Asset pipeline** — Built-in CSS/JS minification with incremental support
@@ -68,10 +69,25 @@ This creates:
 │   ├── youtube.html      # {{< youtube ID >}}
 │   ├── figure.html       # {{< figure src="..." alt="..." >}}
 │   └── note.html         # {{< note >}}...{{< /note >}}
+├── archetypes/
+│   ├── default.md        # `cstatic new` template (title/date placeholders)
+│   └── post.md           # `cstatic new --kind post` template (starts as draft)
 └── static/
     ├── css/style.css     # Minimal reset
     └── js/app.js         # Placeholder
 ```
+
+### Create New Pages
+
+Generate content from archetypes — great for consistent frontmatter across posts:
+
+```bash
+cstatic new posts/my-post.md              # uses archetypes/default.md
+cstatic new --kind post posts/launch.md   # uses archetypes/post.md
+cstatic new about.md                      # top-level page
+```
+
+The filename stem derives the title (`my-post` → `My Post`) and slug. Archetypes support three placeholders: `{{ title }}`, `{{ slug }}`, and `{{ date }}` (today's date, `YYYY-MM-DD`). C-Static refuses to overwrite existing files.
 
 ### Build & Preview
 
@@ -392,7 +408,8 @@ This installs the `cstatic` binary to `/usr/local/bin/`.
 
 ```
 src/
-├── main.cpp              # CLI entry point (init, build, serve)
+├── main.cpp              # CLI entry point (init, new, build, serve)
+├── cli/                  # cstatic new content generator
 ├── config/               # TOML config parsing & validation
 ├── content/              # Markdown rendering & frontmatter parsing
 ├── data/                 # JSON/YAML data loading

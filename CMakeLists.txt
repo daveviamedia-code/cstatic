@@ -88,6 +88,7 @@ FetchContent_MakeAvailable(cli11 tomlplusplus yaml-cpp cmark-gfm inja xxhash cpp
 add_executable(cstatic
     src/main.cpp
     src/assets/asset_pipeline.cpp
+    src/cli/content_generator.cpp
     src/config/config.cpp
     src/content/frontmatter.cpp
     src/content/markdown.cpp

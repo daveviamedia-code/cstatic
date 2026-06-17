@@ -701,3 +701,31 @@ When you include `{{ seo_meta }}` in a template (typically inside `<head>`), C-S
 All attribute values are XML-escaped. Inja renders missing variables as empty strings, so adding `{{ seo_meta }}` to existing templates is always safe.
 
 If two pages alias the same URL, or an alias collides with a real page, **last-wins** (deterministic, since source files are sorted).
+
+---
+
+## Archetypes — `cstatic new`
+
+The `cstatic new` command creates content files from archetype templates in the `archetypes/` directory. This is not a config key — it's a project workflow convention.
+
+```bash
+cstatic new posts/my-post.md              # uses archetypes/default.md
+cstatic new --kind post posts/launch.md   # uses archetypes/post.md
+```
+
+### Resolution order
+
+1. If `--kind` is given, load `archetypes/<kind>.md`.
+2. Otherwise (or if the named archetype is missing), load `archetypes/default.md`.
+3. If neither exists, a built-in default is used. An unknown `--kind` prints a warning and falls back to `default`.
+
+### Placeholders
+
+| Placeholder | Replaced with |
+|-------------|---------------|
+| `{{ title }}` | Title-cased filename stem (`my-cool-post` → `My Cool Post`) |
+| `{{ slug }}` | Filename stem verbatim (`my-cool-post`) |
+| `{{ date }}` | Today's date as `YYYY-MM-DD` |
+
+Placeholder matching tolerates inner whitespace (`{{title}}`, `{{ title }}` both work). The output path is `<source_dir>/<path>` (so `source_dir = "src"` + `posts/x.md` → `src/posts/x.md`). Parent directories are created automatically. Existing files are never overwritten.
+

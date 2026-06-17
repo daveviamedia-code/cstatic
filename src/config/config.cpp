@@ -231,6 +231,9 @@ Config load_config(const std::string& path, const std::string& env) {
     // --- [build] fingerprint ---
     cfg.fingerprint_assets = optional_bool(tbl, "build.fingerprint_assets", cfg.fingerprint_assets);
 
+    // --- [build] scheduled publishing ---
+    cfg.publish_future = optional_bool(tbl, "build.publish_future", cfg.publish_future);
+
     // --- [build.search] ---
     cfg.search_enabled = optional_bool(tbl,   "build.search.enabled", cfg.search_enabled);
     cfg.search_output  = optional_string(tbl, "build.search.output",  cfg.search_output);
@@ -365,6 +368,7 @@ std::string config_to_json(const Config& cfg) {
     j["build"]["images"]["avif"]      = cfg.images_avif;
 
     j["build"]["fingerprint_assets"] = cfg.fingerprint_assets;
+    j["build"]["publish_future"]     = cfg.publish_future;
 
     j["build"]["search"]["enabled"] = cfg.search_enabled;
     j["build"]["search"]["output"]  = cfg.search_output;

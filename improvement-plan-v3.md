@@ -167,7 +167,7 @@ Add `archetypes/default.md` and `archetypes/post.md` to init.
 
 ---
 
-## Feature 4: Scheduled Publishing
+## Feature 4: Scheduled Publishing ✅ DONE
 
 ### Config — `src/config/config.hpp`
 ```cpp

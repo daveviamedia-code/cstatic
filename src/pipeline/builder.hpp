@@ -24,6 +24,7 @@ struct BuildResult {
     int pages_cached = 0;    // unchanged pages (incremental hit)
     int pages_removed = 0;   // orphaned outputs cleaned up
     int pages_skipped = 0;   // drafts
+    int pages_scheduled = 0; // future-dated pages skipped
     int assets_copied = 0;
     int assets_minified = 0;
     int assets_cached = 0;

@@ -44,6 +44,7 @@ struct Config {
 
     // [build]
     bool fingerprint_assets = false;
+    bool publish_future     = false;  // skip pages dated in the future
 
     // [build.search]
     bool        search_enabled = false;

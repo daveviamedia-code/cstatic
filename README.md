@@ -19,6 +19,7 @@ A fast, minimal static site generator written in C++17.
 - **SEO meta tags** — Automatic Open Graph, Twitter Card, and canonical link tags via `{{ seo_meta }}` template variable
 - **OG image generation** — Per-page social-card images from Inja SVG templates, converted to PNG via rsvg-convert/ImageMagick/Inkscape
 - **Content scaffolding** — `cstatic new` creates pages from archetypes (`archetypes/<kind>.md`) with `{{ title }}`, `{{ slug }}`, and `{{ date }}` placeholders
+- **Scheduled publishing** — Pages with a future `date` are automatically skipped until their date arrives (toggle with `build.publish_future`)
 - **Search index** — Optional client-side search index (`search-index.json`) for Lunr.js/Fuse.js integration
 - **Incremental builds** — Content-hash caching means only changed pages are rebuilt
 - **Asset pipeline** — Built-in CSS/JS minification with incremental support
@@ -202,7 +203,7 @@ function greet(name) {
 | `title`     | Auto       | Page title (falls back to filename)      |
 | `layout`    | `default`  | Template to use                          |
 | `permalink` | Auto       | Custom URL path (e.g. `/custom/`)        |
-| `date`      | —          | ISO date string for sorting              |
+| `date`      | —          | ISO date string (`YYYY-MM-DD`) for sorting; future dates skip the build unless `publish_future = true` |
 | `tags`      | —          | Array of tag strings                     |
 | `aliases`   | —          | Array of old URLs to redirect to this page |
 | `draft`     | `false`    | If true, page is skipped during build    |

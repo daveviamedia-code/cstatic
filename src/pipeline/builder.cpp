@@ -18,7 +18,10 @@
 
 #include <nlohmann/json.hpp>
 #include <chrono>
+#include <ctime>
 #include <cstdlib>
+#include <iomanip>
+#include <sstream>
 #include <filesystem>
 #include <iostream>
 #include <algorithm>
@@ -531,6 +534,19 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         if (rp.parsed.frontmatter.draft && !include_drafts) {
             result.pages_skipped++;
             continue;
+        }
+
+        // Scheduled publishing: skip pages dated in the future unless opted in.
+        // `include_drafts` (dev server / --drafts) also bypasses scheduling so
+        // authors can preview upcoming content locally.
+        if (!cfg.publish_future && !include_drafts && !rp.parsed.frontmatter.date.empty()) {
+            std::tm tm = {};
+            std::istringstream ss(rp.parsed.frontmatter.date);
+            ss >> std::get_time(&tm, "%Y-%m-%d");
+            if (!ss.fail() && std::mktime(&tm) > std::time(nullptr)) {
+                result.pages_scheduled++;
+                continue;
+            }
         }
 
         if (!rp.parsed.frontmatter.permalink.empty()) {

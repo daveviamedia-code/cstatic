@@ -163,6 +163,60 @@ TEST_CASE_METHOD(BuildFixture, "Integration: --drafts includes draft pages", "[i
     REQUIRE(html.find("Draft content") != std::string::npos);
 }
 
+TEST_CASE_METHOD(BuildFixture, "Integration: future-dated pages are skipped by default", "[integration]") {
+    write_source("index.md",
+        "---\ntitle: Home\n---\nPublic content.\n");
+    write_source("upcoming.md",
+        "---\ntitle: Upcoming\ndate: 2999-01-01\n---\nFuture content.\n");
+    write_template("default.html",
+        "<html><body>{{ page.content }}</body></html>");
+
+    auto result = build_site(make_config(), true);
+    REQUIRE(result.pages_scheduled == 1);
+    REQUIRE(result.pages_skipped == 0);
+    REQUIRE(output_exists("index.html"));
+    REQUIRE_FALSE(output_exists("upcoming/index.html"));
+}
+
+TEST_CASE_METHOD(BuildFixture, "Integration: publish_future includes future-dated pages", "[integration]") {
+    write_source("index.md",
+        "---\ntitle: Home\n---\nPublic content.\n");
+    write_source("upcoming.md",
+        "---\ntitle: Upcoming\ndate: 2999-01-01\n---\nFuture content.\n");
+    write_template("default.html",
+        "<html><body>{{ page.content }}</body></html>");
+
+    auto cfg = make_config();
+    cfg.publish_future = true;
+    auto result = build_site(cfg, true);
+    REQUIRE(result.pages_scheduled == 0);
+    REQUIRE(output_exists("index.html"));
+    REQUIRE(output_exists("upcoming/index.html"));
+}
+
+TEST_CASE_METHOD(BuildFixture, "Integration: include_drafts bypasses scheduling for preview", "[integration]") {
+    write_source("upcoming.md",
+        "---\ntitle: Upcoming\ndate: 2999-01-01\n---\nFuture content.\n");
+    write_template("default.html",
+        "<html><body>{{ page.content }}</body></html>");
+
+    // include_drafts=true (dev server / --drafts) previews scheduled content.
+    auto result = build_site(make_config(), true, true);
+    REQUIRE(result.pages_scheduled == 0);
+    REQUIRE(output_exists("upcoming/index.html"));
+}
+
+TEST_CASE_METHOD(BuildFixture, "Integration: past-dated pages are never scheduled", "[integration]") {
+    write_source("post.md",
+        "---\ntitle: Old Post\ndate: 2000-01-01\n---\nPast content.\n");
+    write_template("default.html",
+        "<html><body>{{ page.content }}</body></html>");
+
+    auto result = build_site(make_config(), true);
+    REQUIRE(result.pages_scheduled == 0);
+    REQUIRE(output_exists("post/index.html"));
+}
+
 TEST_CASE_METHOD(BuildFixture, "Integration: data-driven per-item pages", "[integration]") {
     write_source("index.md", "---\ntitle: Home\n---\nHome.\n");
     write_template("product.html",

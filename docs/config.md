@@ -219,6 +219,27 @@ When fingerprinting is off, `{{ asset() }}` returns the original path unchanged.
 
 ---
 
+## `build.publish_future` — Scheduled Publishing
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `publish_future` | bool | `false` | When `false`, pages with a frontmatter `date` set in the future are skipped during build |
+
+```toml
+[build]
+publish_future = false
+```
+
+Pages dated in the future are treated like drafts — they are excluded from the build (and from collections, feeds, and sitemaps) until their date arrives. This lets you stage content ahead of time and have it go live automatically on later builds.
+
+- Dates are parsed as `YYYY-MM-DD` in local time. Malformed dates are ignored (the page builds normally).
+- The `--drafts` flag (and the dev server) bypasses scheduling so you can preview upcoming content locally.
+- Skipped pages are reported in the build summary as `(N scheduled)`.
+
+Set `publish_future = true` to publish everything regardless of date (useful for previews or imports).
+
+---
+
 ## `[build.highlight]` — Syntax Highlighting
 
 | Key | Type | Default | Description |

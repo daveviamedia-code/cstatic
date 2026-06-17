@@ -566,6 +566,9 @@ int cmd_build(bool full_rebuild, bool include_drafts, int jobs, const std::strin
         if (result.pages_skipped > 0) {
             std::cout << colorize(color::yellow, " (" + std::to_string(result.pages_skipped) + " draft(s) skipped)");
         }
+        if (result.pages_scheduled > 0) {
+            std::cout << colorize(color::dim, " (" + std::to_string(result.pages_scheduled) + " scheduled)");
+        }
         if (result.pages_removed > 0) {
             std::cout << colorize(color::yellow, " (" + std::to_string(result.pages_removed) + " orphan(s) removed)");
         }

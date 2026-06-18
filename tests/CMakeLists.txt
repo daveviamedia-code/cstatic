@@ -14,6 +14,7 @@ set(LIB_SOURCES
     ${CMAKE_SOURCE_DIR}/src/cli/content_generator.cpp
     ${CMAKE_SOURCE_DIR}/src/config/config.cpp
     ${CMAKE_SOURCE_DIR}/src/content/frontmatter.cpp
+    ${CMAKE_SOURCE_DIR}/src/content/link_graph.cpp
     ${CMAKE_SOURCE_DIR}/src/content/markdown.cpp
     ${CMAKE_SOURCE_DIR}/src/content/shortcodes.cpp
     ${CMAKE_SOURCE_DIR}/src/data/data_loader.cpp
@@ -45,6 +46,7 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/tests/test_shortcodes.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_content_generator.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_link_checker.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_link_graph.cpp
 )
 
 add_executable(cstatic_tests ${TEST_SOURCES} ${LIB_SOURCES})

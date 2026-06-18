@@ -91,6 +91,7 @@ add_executable(cstatic
     src/cli/content_generator.cpp
     src/config/config.cpp
     src/content/frontmatter.cpp
+    src/content/link_graph.cpp
     src/content/markdown.cpp
     src/content/shortcodes.cpp
     src/data/data_loader.cpp

@@ -960,3 +960,78 @@ TEST_CASE_METHOD(BuildFixture, "OG Images: disabled by default produces no og di
     REQUIRE_FALSE(output_exists("og/index.svg"));
     REQUIRE_FALSE(fs::exists(root_dir + "/output/og"));
 }
+
+// ---------------------------------------------------------------------------
+// Wikilinks + backlinks (Feature #6)
+// ---------------------------------------------------------------------------
+
+TEST_CASE_METHOD(BuildFixture, "Wikilinks: resolves and emits backlinks", "[integration][wikilinks]") {
+    // a.md wikilinks to b.md via [[b]]; b.md is titled "B Page".
+    write_source("a.md", "---\ntitle: Alpha\n---\nLink: [[b]].\n");
+    write_source("b.md", "---\ntitle: B Page\n---\nBeta body.\n");
+    write_template("default.html",
+        "<html><body>"
+        "{{ page.content }}"
+        "<section id=\"backlinks\">"
+        "{% for bl in page.backlinks %}<span class=\"bl\">{{ bl.title }}</span>{% endfor %}"
+        "</section>"
+        "</body></html>");
+
+    auto cfg = make_config();
+    cfg.wikilinks_enabled = true;
+    cfg.minify_html = false;  // keep attribute quotes stable for assertions
+    auto result = build_site(cfg, /*incremental=*/false);
+    REQUIRE(result.pages_built >= 2);
+
+    // a's body should contain the resolved wikilink (display defaults to target).
+    std::string a_html = read_output("a/index.html");
+    REQUIRE(a_html.find("<a href=\"/b/\">b</a>") != std::string::npos);
+
+    // b's backlinks section should mention Alpha (a links to b).
+    std::string b_html = read_output("b/index.html");
+    REQUIRE(b_html.find("class=\"bl\"") != std::string::npos);
+    REQUIRE(b_html.find("Alpha") != std::string::npos);
+}
+
+TEST_CASE_METHOD(BuildFixture, "Wikilinks: disabled by default leaves syntax intact", "[integration][wikilinks]") {
+    write_source("a.md", "---\ntitle: Alpha\n---\nLink: [[b]].\n");
+    write_source("b.md", "---\ntitle: Beta\n---\nBeta.\n");
+    write_template("default.html", "<html><body>{{ page.content }}</body></html>");
+
+    auto cfg = make_config();
+    // wikilinks_enabled defaults to false
+    build_site(cfg, /*incremental=*/false);
+
+    std::string a_html = read_output("a/index.html");
+    // With wikilinks off, the brackets survive as literal text (cmark may
+    // wrap them in a <code>-like element, but the raw `[[b]]` chars persist).
+    REQUIRE(a_html.find("[[b]]") != std::string::npos);
+    // And no wikilink anchor was emitted.
+    REQUIRE(a_html.find("href=\"/b/\">b</a>") == std::string::npos);
+}
+
+TEST_CASE_METHOD(BuildFixture, "Wikilinks: title change invalidates linker incrementally", "[integration][wikilinks]") {
+    write_source("a.md", "---\ntitle: Alpha\n---\nLink: [[b]].\n");
+    write_source("b.md", "---\ntitle: Beta\n---\nBeta body.\n");
+    write_template("default.html",
+        "<html><body>"
+        "{{ page.content }}"
+        "<section>{% for bl in page.backlinks %}<span>{{ bl.title }}</span>{% endfor %}</section>"
+        "</body></html>");
+
+    auto cfg = make_config();
+    cfg.wikilinks_enabled = true;
+
+    // First build — both pages built.
+    auto r1 = build_site(cfg, /*incremental=*/true);
+    REQUIRE(r1.pages_built >= 2);
+    // b's backlinks mention Alpha.
+    REQUIRE(read_output("b/index.html").find("Alpha") != std::string::npos);
+
+    // Touch only b.md's title. a.md's hash is unchanged, but the wikilinks
+    // index hash changes — so a should also rebuild on the next pass.
+    write_source("b.md", "---\ntitle: Beta Renamed\n---\nBeta body.\n");
+    auto r2 = build_site(cfg, /*incremental=*/true);
+    // At least 2 pages built (b.md changed + a.md invalidated via wikilinks).
+    REQUIRE(r2.pages_built >= 2);
+}

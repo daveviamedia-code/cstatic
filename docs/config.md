@@ -283,6 +283,7 @@ JavaScript/TypeScript (`js`, `javascript`, `ts`), Python (`py`, `python`), C/C++
 |-----|------|---------|-------------|
 | `extensions` | string[] | all enabled | Subset of GFM extensions to enable |
 | `shortcodes_dir` | string | `"shortcodes"` | Directory containing shortcode templates (relative to project root) |
+| `wikilinks` | bool | `false` | Rewrite `[[target]]` / `[[target\|display]]` syntax to `<a>` and expose `page.backlinks` |
 
 C-Static uses [cmark-gfm](https://github.com/github/cmark-gfm) for rendering, which supports GitHub-Flavored Markdown extensions. By default all four are enabled. To enable only a subset:
 
@@ -320,6 +321,54 @@ This is **important** text rendered inside the shortcode.
 ```
 
 The render context exposes `params` (positional array), `named` (object), `content` (block inner HTML), and `page` (current page's `title`, `url`, `slug`, `date`). An unknown shortcode prints a notice on stderr and expands to nothing. Shortcodes are disabled automatically when the directory is empty or missing.
+
+### Wikilinks & Backlinks
+
+Wikilinks provide a slug-or-title shorthand for cross-referencing pages, and the build automatically exposes the reverse relationship (`page.backlinks`) to templates. Enable with:
+
+```toml
+[build.markdown]
+wikilinks = true
+```
+
+**Syntax** — `[[target]]` or `[[target|display]]` in markdown is rewritten to `<a href="...">display</a>` **before** the cmark-gfm render pass, so the emitted HTML passes through (`CMARK_OPT_UNSAFE` is enabled):
+
+```markdown
+See [[hello]] and [[Hello World|the hello post]] for context.
+```
+
+**Resolution order** — the target string is matched against the index of every parsed page in this order:
+
+1. Exact filename stem (e.g. `[[hello]]` matches `src/hello.md` → `/hello/`).
+2. Slugified target against stem/slug index (e.g. `[[Hello World]]` → `hello-world`).
+3. Lowercased target against the lowercase-title index.
+4. Exact match against frontmatter `aliases` (see below).
+
+When no match is found, the wikilink renders as `<a class="wikilink-unresolved">display</a>` (no `href`) and a warning is printed to stderr. Self-links do not appear in the target's backlinks.
+
+**Aliases** — frontmatter `aliases` (a string array) let old URLs or alternate names resolve to the current page:
+
+```markdown
+---
+title: New Title
+aliases = ["/old-path/", "legacy-name"]
+---
+```
+
+**Backlinks** — every page's render context gains `page.backlinks`, a JSON array of `{ "url", "title" }` pages that wikilink to it. Render with an [Inja](https://github.com/pantor/inja) loop:
+
+```html
+{% if page.backlinks.size() > 0 %}
+<aside>
+  <h2>Pages linking here</h2>
+  <ul>{% for bl in page.backlinks %}<li><a href="{{ bl.url }}">{{ bl.title }}</a></li>{% endfor %}</ul>
+</aside>
+{% endif %}
+```
+
+**Incremental cache** — any change to the resolver index (titles, aliases, or stems) invalidates every page on the next incremental build, so backlink sections stay consistent.
+
+**Known limitations** — data-driven pages aren't indexed (they're generated after Phase 1). Resolution is exact-match only; there is no fuzzy matching.
 
 ---
 

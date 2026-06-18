@@ -64,6 +64,13 @@ struct Config {
     // Empty = shortcodes disabled. Default "shortcodes" matches the scaffold.
     std::string shortcodes_dir = "shortcodes";
 
+    // [build.markdown.wikilinks]
+    // When true, `[[target]]` and `[[target|display]]` in markdown are
+    // rewritten to <a href> before render_markdown. Targets resolve by
+    // filename stem, lowercase title, or frontmatter alias. Each page's
+    // render context gains `page.backlinks` (array of {url, title}).
+    bool wikilinks_enabled = false;
+
     // [og_images]
     bool        og_images_enabled       = false;
     std::string og_images_template      = "og-default";   // SVG template name (no .svg)

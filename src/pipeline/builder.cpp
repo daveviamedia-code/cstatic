@@ -2,6 +2,7 @@
 #include "assets/asset_pipeline.hpp"
 #include "config/config.hpp"
 #include "content/frontmatter.hpp"
+#include "content/link_graph.hpp"
 #include "content/markdown.hpp"
 #include "content/shortcodes.hpp"
 #include "data/data_loader.hpp"
@@ -495,6 +496,10 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
     // missing (see ShortcodeProcessor::available()).
     ShortcodeProcessor shortcode_processor(cfg.shortcodes_dir);
 
+    // Wikilink resolver — built across Phase 1a (indexing) and read-only in
+    // Phase 2 (backlinks). Single-threaded population; multi-threaded reads.
+    LinkGraph link_graph;
+
     // --- Phase 1: Parse all markdown pages ---
     struct RawPage {
         std::string source_path;
@@ -504,6 +509,8 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         std::string html_content;
         std::string template_path; // resolved template file path
         int collection_idx = -1;   // index into cfg.collections (-1 = none)
+        std::vector<Wikilink> outgoing_links;  // populated in 1b when wikilinks are on
+        bool render_failed = false;            // markdown render error in 1b
     };
 
     std::vector<RawPage> raw_pages;
@@ -581,28 +588,6 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
             title = fname;
         }
 
-        // Expand shortcodes ({{< name params >}} / {{< name >}}...{{< /name >}})
-        // before cmark-gfm. CMARK_OPT_UNSAFE lets the emitted raw HTML pass
-        // through to the final document.
-        std::string body = rp.parsed.body;
-        if (shortcode_processor.available()) {
-            nlohmann::json page_ctx;
-            page_ctx["title"] = title;
-            page_ctx["url"]   = rp.url;
-            page_ctx["slug"]  = fs::path(file_path).stem().string();
-            if (!rp.parsed.frontmatter.date.empty())
-                page_ctx["date"] = rp.parsed.frontmatter.date;
-            body = shortcode_processor.process(body, page_ctx);
-        }
-
-        try {
-            rp.html_content = render_markdown(body, md_opts);
-        } catch (const std::exception& e) {
-            result.errors.push_back({BuildError::Type::Markdown, file_path,
-                                     "", 0, e.what()});
-            continue;
-        }
-
         // Resolve template path
         std::string layout = rp.parsed.frontmatter.layout;
         std::string tmpl_path = utils::path_join(cfg.template_dir, layout + ".html");
@@ -641,6 +626,77 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
             }
         }
 
+        // Persist the resolved title on the parsed frontmatter so Phase 1b
+        // can read it back from rp.parsed.frontmatter.title without redoing
+        // the fallback logic.
+        rp.parsed.frontmatter.title = title;
+
+        // Wikilinks: index this page after URL and title are final so other
+        // pages' [[...]] targets can resolve by filename stem, lowercase
+        // title, or frontmatter alias.
+        if (cfg.wikilinks_enabled) {
+            link_graph.index_page(rp.url, title, rp.parsed.frontmatter.aliases);
+        }
+
+        // Collect alias redirects before moving rp.
+        for (const auto& alias_url : rp.parsed.frontmatter.aliases) {
+            AliasEntry ae;
+            ae.alias_url = alias_url;
+            ae.target_url = rp.url;
+            ae.date = rp.parsed.frontmatter.date;
+            alias_entries.push_back(std::move(ae));
+        }
+
+        raw_pages.push_back(std::move(rp));
+    }
+
+    // --- Phase 1a complete: link graph is fully indexed. Hash its
+    // serialized form so any title/alias/stem change invalidates downstream
+    // pages on the next incremental build (coarse-grained, like shortcode
+    // template changes — see needs_rebuild check in Phase 2).
+    if (cfg.wikilinks_enabled) {
+        hashes.hash_string("meta:wikilinks_index", link_graph.serialize_index());
+    }
+
+    // --- Phase 1b: Shortcodes, wikilinks, markdown render ---
+    // Bodies are rendered AFTER every page has been indexed so [[wikilinks]]
+    // can resolve against the complete site graph. pages_array is populated
+    // here (excerpt depends on html_content) and consumed by downstream
+    // modules (sitemap, RSS, search, OG images).
+    for (auto& rp : raw_pages) {
+        const std::string& title = rp.parsed.frontmatter.title;
+
+        // Expand shortcodes ({{< name params >}} / {{< name >}}...{{< /name >}})
+        // before cmark-gfm. CMARK_OPT_UNSAFE lets the emitted raw HTML pass
+        // through to the final document.
+        std::string body = rp.parsed.body;
+        if (shortcode_processor.available()) {
+            nlohmann::json page_ctx;
+            page_ctx["title"] = title;
+            page_ctx["url"]   = rp.url;
+            page_ctx["slug"]  = fs::path(rp.source_path).stem().string();
+            if (!rp.parsed.frontmatter.date.empty())
+                page_ctx["date"] = rp.parsed.frontmatter.date;
+            body = shortcode_processor.process(body, page_ctx);
+        }
+
+        // Rewrite [[wikilinks]] -> <a href>. Done AFTER shortcodes so a
+        // shortcode body can introduce wikilinks, and BEFORE render_markdown
+        // so the emitted raw HTML survives into the final document.
+        if (cfg.wikilinks_enabled) {
+            rp.outgoing_links = link_graph.rewrite_wikilinks(body, rp.url);
+            link_graph.add_outgoing(rp.url, rp.outgoing_links);
+        }
+
+        try {
+            rp.html_content = render_markdown(body, md_opts);
+        } catch (const std::exception& e) {
+            result.errors.push_back({BuildError::Type::Markdown, rp.source_path,
+                                     "", 0, e.what()});
+            rp.render_failed = true;
+            continue;
+        }
+
         nlohmann::json tags = nlohmann::json::array();
         for (const auto& tag : rp.parsed.frontmatter.tags) {
             tags.push_back(tag);
@@ -658,20 +714,15 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         page_meta["sitemap_changefreq"] = rp.parsed.frontmatter.sitemap_changefreq;
         page_meta["sitemap_priority"]   = rp.parsed.frontmatter.sitemap_priority;
         pages_array.push_back(page_meta);
-
-        rp.parsed.frontmatter.title = title;
-
-        // Collect alias redirects before moving rp.
-        for (const auto& alias_url : rp.parsed.frontmatter.aliases) {
-            AliasEntry ae;
-            ae.alias_url = alias_url;
-            ae.target_url = rp.url;
-            ae.date = rp.parsed.frontmatter.date;
-            alias_entries.push_back(std::move(ae));
-        }
-
-        raw_pages.push_back(std::move(rp));
     }
+
+    // Drop pages that failed markdown rendering so Phase 2 doesn't try to
+    // render a layout template for them. Matches the pre-split behavior
+    // where `continue` in the original loop excluded them from raw_pages.
+    raw_pages.erase(
+        std::remove_if(raw_pages.begin(), raw_pages.end(),
+                       [](const RawPage& p) { return p.render_failed; }),
+        raw_pages.end());
 
     std::sort(pages_array.begin(), pages_array.end(),
         [](const nlohmann::json& a, const nlohmann::json& b) {
@@ -1014,6 +1065,13 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
                     break;
                 }
             }
+            // Wikilinks invalidate every page when the resolver index
+            // changes (any title/alias/stem edit). Coarse-grained but
+            // consistent with how shortcode template changes are handled.
+            if (!needs_rebuild && cfg.wikilinks_enabled &&
+                !hashes.is_unchanged_key("meta:wikilinks_index")) {
+                needs_rebuild = true;
+            }
         }
 
         if (needs_rebuild) {
@@ -1098,6 +1156,13 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
             ctx["pages"] = pages_array;
             ctx["data"] = all_data;
             ctx["collections"] = collections_json;
+
+            // Wikilinks backlinks — read-only lookup against the fully-built
+            // link graph. Safe in this multi-threaded render_task because no
+            // writes occur (single-threaded population finished in Phase 1).
+            if (cfg.wikilinks_enabled) {
+                ctx["page"]["backlinks"] = link_graph.get_backlinks(rp.url);
+            }
 
             std::string og_image_for_page = rp.parsed.frontmatter.image;
             if (og_image_for_page.empty()) {

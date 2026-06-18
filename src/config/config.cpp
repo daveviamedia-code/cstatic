@@ -245,6 +245,7 @@ Config load_config(const std::string& path, const std::string& env) {
     // --- [build.markdown] ---
     cfg.markdown_extensions = optional_string_array(tbl, "build.markdown.extensions");
     cfg.shortcodes_dir      = optional_string(tbl,      "build.markdown.shortcodes_dir", cfg.shortcodes_dir);
+    cfg.wikilinks_enabled   = optional_bool(tbl,        "build.markdown.wikilinks",       cfg.wikilinks_enabled);
 
     // --- [og_images] ---
     cfg.og_images_enabled       = optional_bool(tbl,   "og_images.enabled",       cfg.og_images_enabled);
@@ -382,6 +383,7 @@ std::string config_to_json(const Config& cfg) {
 
     j["build"]["markdown"]["extensions"]     = cfg.markdown_extensions;
     j["build"]["markdown"]["shortcodes_dir"] = cfg.shortcodes_dir;
+    j["build"]["markdown"]["wikilinks"]      = cfg.wikilinks_enabled;
 
     j["og_images"]["enabled"]       = cfg.og_images_enabled;
     j["og_images"]["template"]      = cfg.og_images_template;

@@ -21,6 +21,7 @@ A fast, minimal static site generator written in C++17.
 - **Content scaffolding** — `cstatic new` creates pages from archetypes (`archetypes/<kind>.md`) with `{{ title }}`, `{{ slug }}`, and `{{ date }}` placeholders
 - **Scheduled publishing** — Pages with a future `date` are automatically skipped until their date arrives (toggle with `build.publish_future`)
 - **Broken link checker** — `cstatic check` scans built output and verifies internal links against the filesystem (and optionally external URLs via HTTP HEAD), exiting non-zero so it can gate CI
+- **Wikilinks & backlinks** — `[[page]]` syntax resolves by filename stem, lowercase title, or frontmatter alias; `page.backlinks` exposes the reverse relationship to templates
 - **Search index** — Optional client-side search index (`search-index.json`) for Lunr.js/Fuse.js integration
 - **Incremental builds** — Content-hash caching means only changed pages are rebuilt
 - **Asset pipeline** — Built-in CSS/JS minification with incremental support

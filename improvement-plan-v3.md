@@ -226,7 +226,7 @@ bool check_external = false; int check_timeout_ms = 5000;  // [check] section
 
 ---
 
-## Feature 6: Backlinks / Content Relationships
+## Feature 6: Backlinks / Content Relationships ✅ DONE
 
 ### Config — `src/config/config.hpp`
 ```cpp

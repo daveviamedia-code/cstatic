@@ -197,6 +197,7 @@ style = "github"
 [modules]
 sitemap = true
 rss = false
+json_feed = false
 robots = false
 
 [[collection]]

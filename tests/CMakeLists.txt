@@ -21,6 +21,7 @@ set(LIB_SOURCES
     ${CMAKE_SOURCE_DIR}/src/hash/hash_store.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/sitemap.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/rss.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/json_feed.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/robots.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/search.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/og_images.cpp

@@ -28,7 +28,7 @@ A fast, minimal static site generator written in C++17.
 - **Image optimization** — Resize, recompress, and convert images (WebP/AVIF) via stb
 - **Asset fingerprinting** — Content-based cache-busting with `{{ asset() }}` template helper
 - **Dev server** — Live-reload development server with file watching
-- **Built-in modules** — Sitemap.xml, RSS feed, and robots.txt generation
+- **Built-in modules** — Sitemap.xml, RSS feed, JSON Feed, and robots.txt generation
 - **Custom 404** — Automatic 404 page, or override with `src/404.md`
 - **Zero runtime deps** — Single static binary, no Node.js or Python required
 
@@ -368,12 +368,13 @@ Then use `category: tutorials` in frontmatter (string) or `category: [web, dev]`
 
 ## Built-in Modules
 
-| Module    | Config key         | Output                |
-|----------|--------------------|-----------------------|
-| Sitemap  | `modules.sitemap`  | `/sitemap.xml`        |
-| RSS      | `modules.rss`      | `/feed.xml`           |
-| Robots   | `modules.robots`   | `/robots.txt`         |
-| 404      | Automatic          | `/404.html`           |
+| Module    | Config key            | Output                |
+|----------|-----------------------|-----------------------|
+| Sitemap  | `modules.sitemap`     | `/sitemap.xml`        |
+| RSS      | `modules.rss`         | `/feed.xml`           |
+| JSON Feed| `modules.json_feed`   | `/feed.json`          |
+| Robots   | `modules.robots`      | `/robots.txt`         |
+| 404      | Automatic             | `/404.html`           |
 
 ## Building from Source
 

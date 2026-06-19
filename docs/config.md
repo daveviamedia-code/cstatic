@@ -426,12 +426,14 @@ A default `templates/og-default.svg` (1200×630) is scaffolded by `cstatic init`
 |-----|------|---------|-------------|
 | `sitemap` | bool | `true` | Generate `sitemap.xml` with all published pages |
 | `rss` | bool | `false` | Generate RSS feed at `feed.xml` |
+| `json_feed` | bool | `false` | Generate JSON Feed 1.1 at `feed.json` |
 | `robots` | bool | `false` | Generate `robots.txt` |
 
 ```toml
 [modules]
 sitemap = true
 rss = false
+json_feed = false
 robots = false
 ```
 
@@ -451,6 +453,30 @@ rss = true
 modules.rss_title = "My Site Feed"
 modules.rss_description = "Latest posts from My Site"
 modules.rss_item_count = 10
+```
+
+### JSON Feed Options
+
+When `modules.json_feed = true`, a [JSON Feed 1.1](https://jsonfeed.org/version/1.1)
+file is generated at `<output_dir>/<json_feed_output>` (default `feed.json`).
+Each item carries the page's rendered HTML body as `content_html`, plus
+`title`, `url`, `summary`, and `date_published`.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `modules.json_feed_output` | string | `"feed.json"` | Output filename (written under `output_dir`) |
+
+The feed reuses the RSS options for shared metadata — `modules.rss_title`,
+`modules.rss_description`, and `modules.rss_item_count` — so RSS and JSON
+Feed stay in sync when both are enabled:
+
+```toml
+[modules]
+json_feed = true
+modules.rss_title = "My Site Feed"
+modules.rss_description = "Latest posts from My Site"
+modules.rss_item_count = 10
+modules.json_feed_output = "feed.json"
 ```
 
 ### Robots.txt Options

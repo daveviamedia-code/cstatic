@@ -256,14 +256,18 @@ Config load_config(const std::string& path, const std::string& env) {
     cfg.og_images_output_dir    = optional_string(tbl, "og_images.output_dir",    cfg.og_images_output_dir);
 
     // --- [modules] ---
-    cfg.module_sitemap = optional_bool(tbl, "modules.sitemap", cfg.module_sitemap);
-    cfg.module_rss     = optional_bool(tbl, "modules.rss",     cfg.module_rss);
-    cfg.module_robots  = optional_bool(tbl, "modules.robots",  cfg.module_robots);
+    cfg.module_sitemap  = optional_bool(tbl, "modules.sitemap", cfg.module_sitemap);
+    cfg.module_rss      = optional_bool(tbl, "modules.rss",     cfg.module_rss);
+    cfg.module_json_feed = optional_bool(tbl, "modules.json_feed", cfg.module_json_feed);
+    cfg.module_robots   = optional_bool(tbl, "modules.robots",  cfg.module_robots);
 
     // --- [modules.rss] ---
     cfg.rss_title       = optional_string(tbl, "modules.rss_title", cfg.site_title);
     cfg.rss_description = optional_string(tbl, "modules.rss_description", "");
     cfg.rss_item_count  = optional_int(tbl, "modules.rss_item_count", cfg.rss_item_count);
+
+    // --- [modules.json_feed] ---
+    cfg.json_feed_output = optional_string(tbl, "modules.json_feed_output", cfg.json_feed_output);
 
     // --- [modules.robots] ---
     cfg.robots_user_agent      = optional_string(tbl, "modules.robots_user_agent", cfg.robots_user_agent);
@@ -392,13 +396,16 @@ std::string config_to_json(const Config& cfg) {
     j["og_images"]["height"]        = cfg.og_images_height;
     j["og_images"]["output_dir"]    = cfg.og_images_output_dir;
 
-    j["modules"]["sitemap"] = cfg.module_sitemap;
-    j["modules"]["rss"]     = cfg.module_rss;
-    j["modules"]["robots"]  = cfg.module_robots;
+    j["modules"]["sitemap"]    = cfg.module_sitemap;
+    j["modules"]["rss"]        = cfg.module_rss;
+    j["modules"]["json_feed"]  = cfg.module_json_feed;
+    j["modules"]["robots"]     = cfg.module_robots;
 
     j["modules"]["rss_title"]       = cfg.rss_title;
     j["modules"]["rss_description"] = cfg.rss_description;
     j["modules"]["rss_item_count"]  = cfg.rss_item_count;
+
+    j["modules"]["json_feed_output"] = cfg.json_feed_output;
 
     j["modules"]["robots_user_agent"]       = cfg.robots_user_agent;
     j["modules"]["robots_include_sitemap"]  = cfg.robots_include_sitemap;

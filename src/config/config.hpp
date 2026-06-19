@@ -80,14 +80,18 @@ struct Config {
     std::string og_images_output_dir    = "og";           // subdir under output/
 
     // [modules]
-    bool module_sitemap = true;
-    bool module_rss     = false;
-    bool module_robots  = false;
+    bool module_sitemap  = true;
+    bool module_rss      = false;
+    bool module_json_feed = false;
+    bool module_robots   = false;
 
-    // [modules.rss] (used only when module_rss = true)
+    // [modules.rss] (used only when module_rss = true; also feeds JSON Feed)
     int         rss_item_count = 20;
     std::string rss_title;
     std::string rss_description;
+
+    // [modules.json_feed] (used only when module_json_feed = true)
+    std::string json_feed_output = "feed.json";  // filename under output_dir
 
     // [modules.robots]
     std::string robots_user_agent = "*";

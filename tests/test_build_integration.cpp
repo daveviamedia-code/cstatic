@@ -4,6 +4,8 @@
 #include <cstdlib>
 #include <unistd.h>
 
+#include <nlohmann/json.hpp>
+
 #include "config/config.hpp"
 #include "pipeline/builder.hpp"
 #include "modules/og_images.hpp"
@@ -667,6 +669,87 @@ TEST_CASE_METHOD(BuildFixture, "Integration: aliases in sitemap", "[integration]
 
     std::string sitemap = read_output("sitemap.xml");
     REQUIRE(sitemap.find("/old-post/") != std::string::npos);
+}
+
+// --- JSON Feed Tests ---
+
+TEST_CASE_METHOD(BuildFixture, "Integration: JSON Feed structure", "[integration][json_feed]") {
+    write_source("index.md", "---\ntitle: Home\n---\nHome body.\n");
+    write_source("posts/hello.md",
+        "---\ntitle: Hello\ndate: 2024-01-15\n---\n# Heading\nHello **world**.\n");
+    write_template("default.html",
+        "<html><body>{{ page.content }}</body></html>");
+
+    auto cfg = make_config();
+    cfg.module_json_feed = true;
+
+    build_site(cfg, true);
+
+    REQUIRE(output_exists("feed.json"));
+    auto feed = nlohmann::json::parse(read_output("feed.json"));
+
+    REQUIRE(feed.value("version", "") == "https://jsonfeed.org/version/1.1");
+    REQUIRE(feed.value("title", "") == "Test Site");
+    REQUIRE(feed.value("home_page_url", "") == "https://example.com");
+    REQUIRE(feed.value("feed_url", "") == "https://example.com/feed.json");
+    REQUIRE(feed.value("language", "") == "en");
+    REQUIRE(feed["items"].is_array());
+    REQUIRE(feed["items"].size() >= 1);
+
+    // Most recent post first; "Hello" (2024-01-15) should be item[0].
+    const auto& item = feed["items"][0];
+    REQUIRE(item.value("title", "") == "Hello");
+    REQUIRE(item.value("url", "") == "https://example.com/posts/hello/");
+    REQUIRE(item.value("id", "") == "https://example.com/posts/hello/");
+    REQUIRE(item.value("date_published", "") == "2024-01-15");
+    // content_html carries the rendered markdown body (<h1>, <strong>).
+    std::string html = item.value("content_html", "");
+    REQUIRE(html.find("<h1") != std::string::npos);
+    REQUIRE(html.find("<strong>") != std::string::npos);
+}
+
+TEST_CASE_METHOD(BuildFixture, "Integration: JSON Feed honors rss_item_count", "[integration][json_feed]") {
+    write_source("posts/a.md", "---\ntitle: A\ndate: 2024-01-01\n---\nA.\n");
+    write_source("posts/b.md", "---\ntitle: B\ndate: 2024-02-01\n---\nB.\n");
+    write_source("posts/c.md", "---\ntitle: C\ndate: 2024-03-01\n---\nC.\n");
+    write_template("default.html", "<html><body>{{ page.content }}</body></html>");
+
+    auto cfg = make_config();
+    cfg.module_json_feed = true;
+    cfg.rss_item_count = 2;
+
+    build_site(cfg, true);
+
+    auto feed = nlohmann::json::parse(read_output("feed.json"));
+    REQUIRE(feed["items"].size() == 2);
+    // Descending date order: C, B.
+    REQUIRE(feed["items"][0].value("title", "") == "C");
+    REQUIRE(feed["items"][1].value("title", "") == "B");
+}
+
+TEST_CASE_METHOD(BuildFixture, "Integration: JSON Feed disabled by default", "[integration][json_feed]") {
+    write_source("index.md", "---\ntitle: Home\n---\nHome.\n");
+    write_template("default.html", "<html><body>{{ page.content }}</body></html>");
+
+    build_site(make_config(), true);
+
+    REQUIRE_FALSE(output_exists("feed.json"));
+}
+
+TEST_CASE_METHOD(BuildFixture, "Integration: JSON Feed respects custom output filename", "[integration][json_feed]") {
+    write_source("index.md", "---\ntitle: Home\n---\nHome.\n");
+    write_template("default.html", "<html><body>{{ page.content }}</body></html>");
+
+    auto cfg = make_config();
+    cfg.module_json_feed = true;
+    cfg.json_feed_output = "index.json";
+
+    build_site(cfg, true);
+
+    REQUIRE(output_exists("index.json"));
+    REQUIRE_FALSE(output_exists("feed.json"));
+    auto feed = nlohmann::json::parse(read_output("index.json"));
+    REQUIRE(feed.value("feed_url", "") == "https://example.com/index.json");
 }
 
 // --- Error Reporting Tests ---

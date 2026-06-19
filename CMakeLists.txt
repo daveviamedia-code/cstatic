@@ -98,6 +98,7 @@ add_executable(cstatic
     src/hash/hash_store.cpp
     src/modules/sitemap.cpp
     src/modules/rss.cpp
+    src/modules/json_feed.cpp
     src/modules/robots.cpp
     src/modules/search.cpp
     src/modules/og_images.cpp

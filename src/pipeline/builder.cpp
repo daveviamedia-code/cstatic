@@ -9,6 +9,7 @@
 #include "hash/hash_store.hpp"
 #include "modules/sitemap.hpp"
 #include "modules/rss.hpp"
+#include "modules/json_feed.hpp"
 #include "modules/robots.hpp"
 #include "modules/search.hpp"
 #include "modules/og_images.hpp"
@@ -708,6 +709,7 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         page_meta["date"] = rp.parsed.frontmatter.date;
         page_meta["tags"] = tags;
         page_meta["excerpt"] = utils::truncate_text(utils::strip_html_tags(rp.html_content), 200);
+        page_meta["content_html"]       = rp.html_content;
         page_meta["description"]        = rp.parsed.frontmatter.description;
         page_meta["image"]              = rp.parsed.frontmatter.image;
         page_meta["canonical"]          = rp.parsed.frontmatter.canonical;
@@ -735,7 +737,21 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
     // the changed file is one page while the dependent template is another.
     // Coarse-grained like meta:wikilinks_index — any structural change
     // invalidates the whole site. See needs_rebuild check in Phase 2.
-    hashes.hash_string("meta:pages_array", pages_array.dump());
+    //
+    // content_html is excluded so ordinary body-text edits don't pull every
+    // {{ pages }}-referencing page into an incremental rebuild (the JSON Feed
+    // module reads content_html directly at generation time; templates that
+    // render {{ p.content_html }} are rare and covered by their own file-hash
+    // dependency on the source markdown).
+    {
+        nlohmann::json pages_for_hash = nlohmann::json::array();
+        for (const auto& p : pages_array) {
+            nlohmann::json p_copy = p;
+            p_copy.erase("content_html");
+            pages_for_hash.push_back(p_copy);
+        }
+        hashes.hash_string("meta:pages_array", pages_for_hash.dump());
+    }
 
     // --- Phase 1.5: Apply markdown pagination rules ---
     std::vector<CachedOutput> all_outputs;
@@ -1540,6 +1556,9 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         }
         if (cfg.module_rss) {
             modules::generate_rss(cfg, pages_array, cfg.output_dir);
+        }
+        if (cfg.module_json_feed) {
+            modules::generate_json_feed(cfg, pages_array, cfg.output_dir);
         }
         if (cfg.module_robots) {
             modules::generate_robots(cfg, cfg.output_dir);

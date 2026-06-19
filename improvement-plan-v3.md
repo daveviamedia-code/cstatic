@@ -340,7 +340,7 @@ In `load_template()` (~line 66), call `resolve_inheritance()` on loaded template
 
 ---
 
-## Feature 10: JSON Feed
+## Feature 10: JSON Feed ✅ DONE
 
 ### Config — `src/config/config.hpp`
 ```cpp

@@ -120,6 +120,7 @@ js = false
 sitemap = false
 rss = true
 robots = true
+json_feed = true
 rss_title = "Full RSS"
 rss_description = "Full feed"
 rss_item_count = 50
@@ -150,6 +151,7 @@ per_item = true
     REQUIRE(cfg.minify_js == false);
     REQUIRE(cfg.module_sitemap == false);
     REQUIRE(cfg.module_rss == true);
+    REQUIRE(cfg.module_json_feed == true);
     REQUIRE(cfg.module_robots == true);
     REQUIRE(cfg.rss_item_count == 50);
     REQUIRE(cfg.rss_title == "Full RSS");
@@ -182,6 +184,7 @@ base_url = "https://example.com"
     REQUIRE(cfg.minify_js == true);
     REQUIRE(cfg.module_sitemap == true);
     REQUIRE(cfg.module_rss == false);
+    REQUIRE(cfg.module_json_feed == false);
     REQUIRE(cfg.module_robots == false);
     REQUIRE(cfg.data_dir == "_data");
     fs::remove(path);

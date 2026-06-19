@@ -1035,3 +1035,77 @@ TEST_CASE_METHOD(BuildFixture, "Wikilinks: title change invalidates linker incre
     // At least 2 pages built (b.md changed + a.md invalidated via wikilinks).
     REQUIRE(r2.pages_built >= 2);
 }
+
+TEST_CASE_METHOD(BuildFixture, "Incremental: adding a page updates {{ pages }} lists", "[integration][incremental]") {
+    // a.md renders a template that lists every page title via {{ pages }}.
+    // wikilinks are OFF so the only invalidation signal is meta:pages_array.
+    write_source("a.md", "---\ntitle: Alpha\n---\nBody.\n");
+    write_template("default.html",
+        "<html><body>{{ page.content }}"
+        "{% for p in pages %}<span>{{ p.title }}</span>{% endfor %}"
+        "</body></html>");
+
+    auto cfg = make_config();
+    cfg.wikilinks_enabled = false;
+
+    // First build — a lists only Alpha.
+    auto r1 = build_site(cfg, true);
+    REQUIRE(r1.pages_built >= 1);
+    REQUIRE(read_output("a/index.html").find("Alpha") != std::string::npos);
+    REQUIRE(read_output("a/index.html").find("Beta") == std::string::npos);
+
+    // Add b.md. a.md source is unchanged, BUT pages_array changes — so a
+    // must rebuild on the next incremental pass to pick up Beta.
+    write_source("b.md", "---\ntitle: Beta\n---\nBody.\n");
+    auto r2 = build_site(cfg, false);
+    // Both pages should report built (b is new, a is invalidated).
+    REQUIRE(r2.pages_built >= 2);
+    REQUIRE(read_output("a/index.html").find("Beta") != std::string::npos);
+}
+
+TEST_CASE_METHOD(BuildFixture, "Incremental: deleting a page updates {{ pages }} lists", "[integration][incremental]") {
+    write_source("a.md", "---\ntitle: Alpha\n---\nBody.\n");
+    write_source("b.md", "---\ntitle: Beta\n---\nBody.\n");
+    write_template("default.html",
+        "<html><body>{{ page.content }}"
+        "{% for p in pages %}<span>{{ p.title }}</span>{% endfor %}"
+        "</body></html>");
+
+    auto cfg = make_config();
+    cfg.wikilinks_enabled = false;
+
+    auto r1 = build_site(cfg, true);
+    REQUIRE(r1.pages_built >= 2);
+    REQUIRE(read_output("a/index.html").find("Beta") != std::string::npos);
+
+    // Delete b.md. a.md source unchanged, but pages_array changes — so a
+    // rebuilds and no longer mentions Beta.
+    fs::remove(root_dir + "/src/b.md");
+    auto r2 = build_site(cfg, false);
+    REQUIRE(read_output("a/index.html").find("Beta") == std::string::npos);
+    // b's output should be cleaned up as an orphan.
+    REQUIRE_FALSE(output_exists("b/index.html"));
+}
+
+TEST_CASE_METHOD(BuildFixture, "Incremental: title change on one page invalidates siblings via {{ pages }}", "[integration][incremental]") {
+    write_source("a.md", "---\ntitle: Alpha\n---\nBody.\n");
+    write_source("b.md", "---\ntitle: Beta\n---\nBody.\n");
+    write_template("default.html",
+        "<html><body>{{ page.content }}"
+        "{% for p in pages %}<span>{{ p.title }}</span>{% endfor %}"
+        "</body></html>");
+
+    auto cfg = make_config();
+    cfg.wikilinks_enabled = false;
+
+    auto r1 = build_site(cfg, true);
+    REQUIRE(r1.pages_built >= 2);
+
+    // Change only b.md's title. a.md source is unchanged, but pages_array
+    // changes — so a rebuilds to show "Beta Renamed" in its pages list.
+    write_source("b.md", "---\ntitle: Beta Renamed\n---\nBody.\n");
+    auto r2 = build_site(cfg, false);
+    // Both pages report built: b (source changed) + a (invalidated via pages_array).
+    REQUIRE(r2.pages_built >= 2);
+    REQUIRE(read_output("a/index.html").find("Beta Renamed") != std::string::npos);
+}

@@ -467,7 +467,24 @@ void DevServer::watch_loop() {
 void DevServer::rebuild_and_reload() {
     try {
         Config cfg = load_config("config.toml");
+        // full_rebuild=false respects cfg.incremental_enabled — so dev mode
+        // uses incremental builds when the user has them enabled (default).
         auto result = build_site(cfg, false, include_drafts_);
+
+        // Fallback safety: if an incremental build reports zero work done
+        // with no errors, the cache may be stale relative to the output dir
+        // (e.g. output wiped manually while hashes.json survived). Retry once
+        // as a forced full rebuild so the dev server self-heals instead of
+        // silently serving a broken/empty site.
+        const bool suspicious_zero = cfg.incremental_enabled &&
+            result.pages_built == 0 &&
+            result.pages_cached == 0 &&
+            result.errors.empty();
+        if (suspicious_zero) {
+            std::cerr << "  " << utils::warning_label()
+                      << " incremental rebuild reported no work; retrying as full rebuild\n";
+            result = build_site(cfg, true, include_drafts_);
+        }
 
         // Print rebuild summary
         std::string msg;

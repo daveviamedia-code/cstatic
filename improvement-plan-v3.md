@@ -288,7 +288,7 @@ for (const auto& fmt : cfg.output_formats) {
 
 ---
 
-## Feature 8: Incremental Dev Server Rebuilds
+## Feature 8: Incremental Dev Server Rebuilds ✅ DONE
 
 **Problem**: `dev_server.cpp:470` calls `build_site(cfg, false, ...)` — `false` means full rebuild every time. Additionally, when pages are added/deleted, the `{{ pages }}` context in all templates becomes stale because the incremental hash only tracks individual files, not the pages_array.
 

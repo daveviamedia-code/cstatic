@@ -729,6 +729,14 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
             return a.value("date", "") > b.value("date", "");
         });
 
+    // --- Hash pages_array so structural changes (added/deleted page, title
+    // or date edits that shift sort order) invalidate every page that
+    // references {{ pages }}. File-level hashing can't detect these because
+    // the changed file is one page while the dependent template is another.
+    // Coarse-grained like meta:wikilinks_index — any structural change
+    // invalidates the whole site. See needs_rebuild check in Phase 2.
+    hashes.hash_string("meta:pages_array", pages_array.dump());
+
     // --- Phase 1.5: Apply markdown pagination rules ---
     std::vector<CachedOutput> all_outputs;
     std::vector<PageRecord> all_records;
@@ -1055,6 +1063,11 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
             deps.push_back(rp.template_path);
         }
         deps.insert(deps.end(), shortcode_deps.begin(), shortcode_deps.end());
+        // Structural deps: invalidate every page when the site graph changes.
+        deps.push_back("meta:pages_array");
+        if (cfg.wikilinks_enabled) {
+            deps.push_back("meta:wikilinks_index");
+        }
 
         bool needs_rebuild = true;
         if (incremental) {
@@ -1219,6 +1232,11 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
             deps.push_back(rp.template_path);
         }
         deps.insert(deps.end(), shortcode_deps.begin(), shortcode_deps.end());
+        // Structural deps: invalidate every page when the site graph changes.
+        deps.push_back("meta:pages_array");
+        if (cfg.wikilinks_enabled) {
+            deps.push_back("meta:wikilinks_index");
+        }
 
         if (tasks[i].needs_rebuild) {
             if (was_rendered[render_idx]) {

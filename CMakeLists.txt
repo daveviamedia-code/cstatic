@@ -89,6 +89,7 @@ add_executable(cstatic
     src/main.cpp
     src/assets/asset_pipeline.cpp
     src/cli/content_generator.cpp
+    src/cli/error_format.cpp
     src/config/config.cpp
     src/content/frontmatter.cpp
     src/content/link_graph.cpp

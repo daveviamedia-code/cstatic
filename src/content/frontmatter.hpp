@@ -2,6 +2,7 @@
 
 #include <string>
 #include <ctime>
+#include <stdexcept>
 #include <nlohmann/json.hpp>
 
 namespace cstatic {
@@ -27,6 +28,23 @@ struct Frontmatter {
 struct ParsedContent {
     Frontmatter frontmatter;
     std::string body;   // raw markdown body
+};
+
+// Thrown when frontmatter parsing fails. Carries line+column for structured
+// error reporting (mirrors the RenderError pattern in template/renderer.hpp).
+class FrontmatterError : public std::runtime_error {
+public:
+    FrontmatterError(const std::string& source_file, int line, int column,
+                     const std::string& message)
+        : std::runtime_error(message),
+          source_file_(source_file), line_(line), column_(column) {}
+    const std::string& source_file() const { return source_file_; }
+    int line() const { return line_; }
+    int column() const { return column_; }
+private:
+    std::string source_file_;
+    int line_;
+    int column_;
 };
 
 // Parse a file that may contain YAML frontmatter.

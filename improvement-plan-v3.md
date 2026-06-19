@@ -390,7 +390,7 @@ When set, after initial build, start FileWatcher with rebuild callback (no HTTP 
 
 ---
 
-## Feature 12: Better Error Rendering
+## Feature 12: Better Error Rendering ✅ DONE
 
 ### BuildError — `src/pipeline/builder.hpp`
 Add `int column = 0;` field for column-level precision.
@@ -420,7 +420,7 @@ While features are listed above with OG images as #1, the optimal build order gr
 
 | Phase | Features | Rationale |
 |-------|----------|-----------|
-| **A: Quick Wins** | #4 Scheduled, #10 JSON Feed, #12 Better Errors | Small, self-contained, immediate DX value |
+| **A: Quick Wins** ✅ | #4 Scheduled, #10 JSON Feed, #12 Better Errors | Small, self-contained, immediate DX value |
 | **B: Content Workflow** | #2 Shortcodes, #3 `cstatic new`, #9 Template Inheritance | Core authoring improvements; inheritance benefits shortcode templates |
 | **C: OG Images** ✅ | #1 OG Image Generation | The headline feature; benefits from stable pipeline |
 | **D: Content Intelligence** | #6 Backlinks, #5 Link Checker | Both analyze content relationships |

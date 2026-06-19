@@ -806,6 +806,29 @@ TEST_CASE_METHOD(BuildFixture, "Integration: frontmatter error collected", "[int
     REQUIRE(output_exists("index.html"));
 }
 
+TEST_CASE_METHOD(BuildFixture, "Integration: frontmatter error carries line and column", "[integration][errors]") {
+    write_source("index.md", "---\ntitle: Home\n---\nHome.\n");
+    // Invalid YAML: unclosed flow mapping on the third line of the file.
+    //   file line 1: ---
+    //   file line 2: title: T
+    //   file line 3: data: {bad
+    write_source("broken.md", "---\ntitle: T\ndata: {bad\n---\nbody\n");
+    write_template("default.html",
+        "<html><body>{{ page.content }}</body></html>");
+
+    auto result = build_site(make_config(), true);
+
+    bool found = false;
+    for (const auto& err : result.errors) {
+        if (err.type == BuildError::Type::Frontmatter) {
+            found = true;
+            REQUIRE(err.line > 0);
+            REQUIRE(err.column > 0);
+        }
+    }
+    REQUIRE(found);
+}
+
 TEST_CASE_METHOD(BuildFixture, "Integration: multiple errors collected", "[integration][errors]") {
     write_source("index.md", "---\ntitle: Home\n---\nHome.\n");
     write_source("bad1.md", "---\ntitle: Bad1\nlayout: broken1\n---\nBad1.\n");

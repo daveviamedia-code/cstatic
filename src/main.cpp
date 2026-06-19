@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "cli/content_generator.hpp"
+#include "cli/error_format.hpp"
 #include "config/config.hpp"
 #include "pipeline/builder.hpp"
 #include "pipeline/link_checker.hpp"
@@ -18,7 +19,7 @@ using namespace cstatic::utils;
 
 int cmd_init();
 int cmd_new(const std::string& path, const std::string& kind);
-int cmd_build(bool full_rebuild, bool include_drafts, int jobs, const std::string& env);
+int cmd_build(bool full_rebuild, bool include_drafts, int jobs, const std::string& env, bool verbose);
 int cmd_serve(int port, bool include_drafts, const std::string& env);
 int cmd_check(bool external_flag, int timeout_ms);
 
@@ -44,12 +45,14 @@ int main(int argc, char** argv) {
     bool include_drafts = false;
     int jobs = 0;
     std::string env = "development";
+    bool verbose = false;
     auto* build_cmd = app.add_subcommand("build", "Build the site");
     build_cmd->add_flag("--full", full_rebuild, "Force a clean rebuild (ignore cache)");
     build_cmd->add_flag("--drafts", include_drafts, "Include draft pages in output");
     build_cmd->add_option("-j,--jobs", jobs, "Number of parallel render threads (0 = auto)")->default_val(0);
     build_cmd->add_option("-e,--env", env, "Build environment (e.g. production)")->default_val("development");
-    build_cmd->callback([&full_rebuild, &include_drafts, &jobs, &env]() { std::exit(cmd_build(full_rebuild, include_drafts, jobs, env)); });
+    build_cmd->add_flag("-v,--verbose", verbose, "Show detailed build diagnostics (phase timing)");
+    build_cmd->callback([&full_rebuild, &include_drafts, &jobs, &env, &verbose]() { std::exit(cmd_build(full_rebuild, include_drafts, jobs, env, verbose)); });
 
     // serve subcommand
     int port = 3000;
@@ -89,61 +92,6 @@ static bool write_scaffold_file(const std::string& path, const std::string& cont
 
 static void print_created(const std::string& path) {
     std::cout << "  " << colorize(color::green, "created") << "  " << path << "\n";
-}
-
-// Format a BuildError for the error summary.
-// For template errors with a line number and a resolvable template file,
-// includes ±3 lines of source context with a '>' marker.
-static std::string format_build_error(const cstatic::BuildError& err,
-                                       const std::string& template_dir) {
-    std::ostringstream out;
-
-    const char* type_str = "error";
-    switch (err.type) {
-        case cstatic::BuildError::Type::Template:    type_str = "template"; break;
-        case cstatic::BuildError::Type::Frontmatter: type_str = "frontmatter"; break;
-        case cstatic::BuildError::Type::Markdown:    type_str = "markdown"; break;
-        default: break;
-    }
-
-    if (!err.source_file.empty()) {
-        out << err.source_file;
-    }
-
-    if (!err.template_name.empty()) {
-        out << ": " << type_str << " '" << err.template_name << "'";
-        if (err.line > 0) {
-            std::string tmpl_path = cstatic::utils::path_join(template_dir, err.template_name + ".html");
-            out << " (" << tmpl_path << ":" << err.line << ")";
-        }
-    } else {
-        out << ": " << type_str << " error";
-    }
-
-    out << "\n    " << err.message;
-
-    // Context lines for template errors with line info
-    if (err.line > 0 && !err.template_name.empty()) {
-        std::string tmpl_path = cstatic::utils::path_join(template_dir, err.template_name + ".html");
-        std::ifstream f(tmpl_path);
-        if (f.is_open()) {
-            std::vector<std::string> lines;
-            std::string line;
-            while (std::getline(f, line)) {
-                lines.push_back(line);
-            }
-            int target = err.line;
-            int start_line = std::max(1, target - 3);
-            int end_line = std::min(static_cast<int>(lines.size()), target + 3);
-            for (int l = start_line; l <= end_line; l++) {
-                const char* marker = (l == target) ? ">" : " ";
-                out << "\n    " << marker << " " << l << " | "
-                    << (l <= static_cast<int>(lines.size()) ? lines[l - 1] : "");
-            }
-        }
-    }
-
-    return out.str();
 }
 
 int cmd_init() {
@@ -548,7 +496,7 @@ int cmd_new(const std::string& path, const std::string& kind) {
     return cstatic::cli::generate_content(target, "archetypes", kind);
 }
 
-int cmd_build(bool full_rebuild, bool include_drafts, int jobs, const std::string& env) {
+int cmd_build(bool full_rebuild, bool include_drafts, int jobs, const std::string& env, bool verbose) {
     try {
         cstatic::Config cfg = cstatic::load_config("config.toml", env);
 
@@ -560,10 +508,20 @@ int cmd_build(bool full_rebuild, bool include_drafts, int jobs, const std::strin
                       << result.errors.size() << " error(s):\n\n";
             for (size_t i = 0; i < result.errors.size(); i++) {
                 std::cerr << colorize(color::bold, "  " + std::to_string(i + 1) + ". ")
-                          << format_build_error(result.errors[i], cfg.template_dir)
+                          << cstatic::cli::format_build_error(result.errors[i], cfg.template_dir)
                           << "\n\n";
             }
             return 1;
+        }
+
+        // Verbose: per-phase timing breakdown.
+        if (verbose) {
+            std::cerr << info_label() << " phase timing:\n"
+                      << "    parse+render md : " << static_cast<int>(result.phase1_ms) << " ms\n"
+                      << "    render templates: " << static_cast<int>(result.phase2_ms) << " ms\n"
+                      << "    data+alias pages: " << static_cast<int>(result.phase3_ms) << " ms\n"
+                      << "    asset pipeline  : " << static_cast<int>(result.asset_ms) << " ms\n"
+                      << "    modules         : " << static_cast<int>(result.module_ms) << " ms\n";
         }
 
         // Build stats in green

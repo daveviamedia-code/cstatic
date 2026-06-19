@@ -1,5 +1,4 @@
 #include "content/frontmatter.hpp"
-#include "utils/terminal.hpp"
 
 #include <yaml-cpp/yaml.h>
 #include <stdexcept>
@@ -79,88 +78,103 @@ ParsedContent parse_frontmatter(const std::string& content, const std::string& f
     YAML::Node node;
     try {
         node = YAML::Load(yaml_str);
-    } catch (const YAML::ParserException& err) {
-        std::ostringstream msg;
-        msg << utils::error_label() << " " << filename
-            << ": invalid YAML frontmatter (line " << err.mark.line + 1
-            << "): " << err.msg;
-        throw std::runtime_error(msg.str());
+    } catch (const YAML::Exception& err) {
+        // mark.line is 0-based and relative to yaml_str, which starts one line
+        // below the file's `---` header. +2 converts to a 1-based FILE line so
+        // source-context rendering lines up with what the user sees.
+        // mark.column is 0-based; +1 makes it 1-based (columns are unaffected by
+        // the frontmatter offset).
+        int line = err.mark.is_null() ? 0 : err.mark.line + 2;
+        int col  = err.mark.is_null() ? 0 : err.mark.column + 1;
+        throw FrontmatterError(filename, line, col, err.msg);
     }
 
-    if (!node.IsMap()) {
-        // Frontmatter is not a map — skip it
-        result.body = content;
-        return result;
-    }
+    // Field extraction — BadConversion from .as<T>() throws YAML::Exception
+    // derivatives too, so wrap the whole block to surface structured errors
+    // instead of crashing the build.
+    try {
+        if (!node.IsMap()) {
+            // Frontmatter is not a map — skip it
+            result.body = content;
+            return result;
+        }
 
-    // Extract known fields
-    if (node["title"]) {
-        result.frontmatter.title = node["title"].as<std::string>();
-    }
-    if (node["layout"]) {
-        result.frontmatter.layout = node["layout"].as<std::string>();
-    }
-    if (node["permalink"]) {
-        result.frontmatter.permalink = node["permalink"].as<std::string>();
-    }
-    if (node["date"]) {
-        result.frontmatter.date = node["date"].as<std::string>();
-    }
-    if (node["draft"]) {
-        result.frontmatter.draft = node["draft"].as<bool>();
-    }
-    if (node["description"]) {
-        result.frontmatter.description = node["description"].as<std::string>();
-    }
-    if (node["image"]) {
-        result.frontmatter.image = node["image"].as<std::string>();
-    }
-    if (node["canonical"]) {
-        result.frontmatter.canonical = node["canonical"].as<std::string>();
-    }
-    if (node["sitemap_changefreq"]) {
-        result.frontmatter.sitemap_changefreq = node["sitemap_changefreq"].as<std::string>();
-    }
-    if (node["sitemap_priority"]) {
-        // Tolerate both numeric (0.8) and string ("0.8") YAML
-        try {
-            result.frontmatter.sitemap_priority = node["sitemap_priority"].as<std::string>();
-        } catch (...) {
+        // Extract known fields
+        if (node["title"]) {
+            result.frontmatter.title = node["title"].as<std::string>();
+        }
+        if (node["layout"]) {
+            result.frontmatter.layout = node["layout"].as<std::string>();
+        }
+        if (node["permalink"]) {
+            result.frontmatter.permalink = node["permalink"].as<std::string>();
+        }
+        if (node["date"]) {
+            result.frontmatter.date = node["date"].as<std::string>();
+        }
+        if (node["draft"]) {
+            result.frontmatter.draft = node["draft"].as<bool>();
+        }
+        if (node["description"]) {
+            result.frontmatter.description = node["description"].as<std::string>();
+        }
+        if (node["image"]) {
+            result.frontmatter.image = node["image"].as<std::string>();
+        }
+        if (node["canonical"]) {
+            result.frontmatter.canonical = node["canonical"].as<std::string>();
+        }
+        if (node["sitemap_changefreq"]) {
+            result.frontmatter.sitemap_changefreq = node["sitemap_changefreq"].as<std::string>();
+        }
+        if (node["sitemap_priority"]) {
+            // Tolerate both numeric (0.8) and string ("0.8") YAML
             try {
-                double dv = node["sitemap_priority"].as<double>();
-                std::ostringstream ss;
-                ss << dv;
-                result.frontmatter.sitemap_priority = ss.str();
+                result.frontmatter.sitemap_priority = node["sitemap_priority"].as<std::string>();
             } catch (...) {
-                result.frontmatter.sitemap_priority.clear();
+                try {
+                    double dv = node["sitemap_priority"].as<double>();
+                    std::ostringstream ss;
+                    ss << dv;
+                    result.frontmatter.sitemap_priority = ss.str();
+                } catch (...) {
+                    result.frontmatter.sitemap_priority.clear();
+                }
             }
         }
-    }
-    if (node["tags"] && node["tags"].IsSequence()) {
-        for (const auto& tag : node["tags"]) {
-            result.frontmatter.tags.push_back(tag.as<std::string>());
+        if (node["tags"] && node["tags"].IsSequence()) {
+            for (const auto& tag : node["tags"]) {
+                result.frontmatter.tags.push_back(tag.as<std::string>());
+            }
         }
-    }
-    if (node["aliases"] && node["aliases"].IsSequence()) {
-        for (const auto& a : node["aliases"]) {
-            result.frontmatter.aliases.push_back(a.as<std::string>());
+        if (node["aliases"] && node["aliases"].IsSequence()) {
+            for (const auto& a : node["aliases"]) {
+                result.frontmatter.aliases.push_back(a.as<std::string>());
+            }
         }
-    }
 
-    // Collect remaining keys as custom fields
-    static const char* known_keys[] = {
-        "title", "layout", "permalink", "date", "tags", "aliases", "draft",
-        "description", "image", "canonical", "sitemap_changefreq", "sitemap_priority"
-    };
-    for (auto it = node.begin(); it != node.end(); ++it) {
-        std::string key = it->first.as<std::string>();
-        bool is_known = false;
-        for (auto k : known_keys) {
-            if (key == k) { is_known = true; break; }
+        // Collect remaining keys as custom fields
+        static const char* known_keys[] = {
+            "title", "layout", "permalink", "date", "tags", "aliases", "draft",
+            "description", "image", "canonical", "sitemap_changefreq", "sitemap_priority"
+        };
+        for (auto it = node.begin(); it != node.end(); ++it) {
+            std::string key = it->first.as<std::string>();
+            bool is_known = false;
+            for (auto k : known_keys) {
+                if (key == k) { is_known = true; break; }
+            }
+            if (!is_known) {
+                result.frontmatter.custom[key] = yaml_node_to_json(it->second);
+            }
         }
-        if (!is_known) {
-            result.frontmatter.custom[key] = yaml_node_to_json(it->second);
-        }
+    } catch (const FrontmatterError&) {
+        // Already structured — let it propagate unchanged.
+        throw;
+    } catch (const YAML::Exception& err) {
+        int line = err.mark.is_null() ? 0 : err.mark.line + 2;
+        int col  = err.mark.is_null() ? 0 : err.mark.column + 1;
+        throw FrontmatterError(filename, line, col, err.msg);
     }
 
     return result;

@@ -238,13 +238,13 @@ static void build_paginated_pages(
         } catch (const RenderError& e) {
             if (errors) {
                 errors->push_back({BuildError::Type::Template, e.source_file(),
-                                   e.template_name(), e.line(), e.what()});
+                                   e.template_name(), e.line(), 0, e.what()});
             }
             continue;
         } catch (const std::runtime_error& e) {
             if (errors) {
                 errors->push_back({BuildError::Type::Generic, ds.file,
-                                   ds.template_name, 0, e.what()});
+                                   ds.template_name, 0, 0, e.what()});
             }
             continue;
         }
@@ -323,13 +323,13 @@ static void build_per_item_pages(
         } catch (const RenderError& e) {
             if (errors) {
                 errors->push_back({BuildError::Type::Template, e.source_file(),
-                                   e.template_name(), e.line(), e.what()});
+                                   e.template_name(), e.line(), 0, e.what()});
             }
             continue;
         } catch (const std::runtime_error& e) {
             if (errors) {
                 errors->push_back({BuildError::Type::Generic, ds.file,
-                                   ds.template_name, 0, e.what()});
+                                   ds.template_name, 0, 0, e.what()});
             }
             continue;
         }
@@ -408,7 +408,7 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
     // --- Run before_build hook ---
     if (!run_hook(cfg.hook_before_build, cfg.env, cfg.output_dir, 0)) {
         result.errors.push_back({
-            BuildError::Type::Generic, "", "before_build", 0,
+            BuildError::Type::Generic, "", "before_build", 0, 0,
             "before_build hook failed: '" + cfg.hook_before_build + "'"
         });
         auto end = std::chrono::high_resolution_clock::now();
@@ -533,9 +533,13 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         try {
             content = utils::read_file(file_path);
             rp.parsed = parse_frontmatter(content, file_path);
+        } catch (const FrontmatterError& e) {
+            result.errors.push_back({BuildError::Type::Frontmatter, e.source_file(),
+                                     "", e.line(), e.column(), e.what()});
+            continue;
         } catch (const std::exception& e) {
             result.errors.push_back({BuildError::Type::Frontmatter, file_path,
-                                     "", 0, e.what()});
+                                     "", 0, 0, e.what()});
             continue;
         }
 
@@ -693,7 +697,7 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
             rp.html_content = render_markdown(body, md_opts);
         } catch (const std::exception& e) {
             result.errors.push_back({BuildError::Type::Markdown, rp.source_path,
-                                     "", 0, e.what()});
+                                     "", 0, 0, e.what()});
             rp.render_failed = true;
             continue;
         }
@@ -1054,6 +1058,8 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         }
     }
 
+    auto t_phase1 = std::chrono::high_resolution_clock::now();
+
     // --- Phase 2: Render markdown pages, track dependencies, decide what to rebuild ---
 
     // Shortcode template paths — every rendered page depends on them so a
@@ -1212,11 +1218,11 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
             } catch (const RenderError& e) {
                 std::lock_guard<std::mutex> lock(errors_mutex);
                 result.errors.push_back({BuildError::Type::Template, e.source_file(),
-                                         e.template_name(), e.line(), e.what()});
+                                         e.template_name(), e.line(), 0, e.what()});
             } catch (const std::runtime_error& e) {
                 std::lock_guard<std::mutex> lock(errors_mutex);
                 result.errors.push_back({BuildError::Type::Generic, rp.source_path,
-                                         rp.parsed.frontmatter.layout, 0, e.what()});
+                                         rp.parsed.frontmatter.layout, 0, 0, e.what()});
             }
         }
     };
@@ -1270,6 +1276,8 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         rec.deps = deps;
         all_records.push_back(std::move(rec));
     }
+
+    auto t_phase2 = std::chrono::high_resolution_clock::now();
 
     // --- Phase 3: Data-driven pages ---
     for (const auto& ds : cfg.data_sources) {
@@ -1530,6 +1538,8 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         }
     }
 
+    auto t_phase3 = std::chrono::high_resolution_clock::now();
+
     // --- Process static assets (copy + minify + optional image optimization + fingerprinting) ---
     {
         std::vector<std::string> asset_paths;
@@ -1541,6 +1551,8 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         result.assets_removed = asset_result.files_removed;
         result.bytes_saved = asset_result.bytes_saved;
     }
+
+    auto t_assets = std::chrono::high_resolution_clock::now();
 
     // --- Generate OG image files (after the output wipe + asset pipeline) ---
     if (cfg.og_images_enabled) {
@@ -1584,10 +1596,12 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         }
     }
 
+    auto t_modules = std::chrono::high_resolution_clock::now();
+
     // --- Run after_build hook ---
     if (!run_hook(cfg.hook_after_build, cfg.env, cfg.output_dir, result.pages_built)) {
         result.errors.push_back({
-            BuildError::Type::Generic, "", "after_build", 0,
+            BuildError::Type::Generic, "", "after_build", 0, 0,
             "after_build hook failed: '" + cfg.hook_after_build + "'"
         });
     }
@@ -1603,6 +1617,11 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
 
     auto end = std::chrono::high_resolution_clock::now();
     result.elapsed_ms = std::chrono::duration<double, std::milli>(end - start).count();
+    result.phase1_ms  = std::chrono::duration<double, std::milli>(t_phase1 - start).count();
+    result.phase2_ms  = std::chrono::duration<double, std::milli>(t_phase2 - t_phase1).count();
+    result.phase3_ms  = std::chrono::duration<double, std::milli>(t_phase3 - t_phase2).count();
+    result.asset_ms   = std::chrono::duration<double, std::milli>(t_assets - t_phase3).count();
+    result.module_ms  = std::chrono::duration<double, std::milli>(t_modules - t_assets).count();
 
     return result;
 }

@@ -108,6 +108,16 @@ hash_file = ".cstatic_cache/hashes.json"
 
 Use `cstatic build --full` to force a clean rebuild regardless of this setting.
 
+### Build flags
+
+| Flag | Description |
+|------|-------------|
+| `--full` | Force a clean rebuild (ignore the hash cache) |
+| `--drafts` | Include draft pages in the output |
+| `-j, --jobs <N>` | Parallel render threads (0 = auto) |
+| `-e, --env <name>` | Build environment overlay (e.g. `production`) |
+| `-v, --verbose` | Print per-phase build timing (parse, render, data pages, assets, modules) to stderr |
+
 ---
 
 ## `[build.minify]` — Asset Minification

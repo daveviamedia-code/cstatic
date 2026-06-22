@@ -4,6 +4,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <csignal>
 
 #include "cli/content_generator.hpp"
 #include "cli/error_format.hpp"
@@ -11,6 +12,7 @@
 #include "pipeline/builder.hpp"
 #include "pipeline/link_checker.hpp"
 #include "server/dev_server.hpp"
+#include "server/file_watcher.hpp"
 #include "utils/terminal.hpp"
 #include "utils/path.hpp"
 
@@ -19,7 +21,7 @@ using namespace cstatic::utils;
 
 int cmd_init();
 int cmd_new(const std::string& path, const std::string& kind);
-int cmd_build(bool full_rebuild, bool include_drafts, int jobs, const std::string& env, bool verbose);
+int cmd_build(bool full_rebuild, bool include_drafts, int jobs, const std::string& env, bool verbose, bool watch);
 int cmd_serve(int port, bool include_drafts, const std::string& env);
 int cmd_check(bool external_flag, int timeout_ms);
 
@@ -46,13 +48,15 @@ int main(int argc, char** argv) {
     int jobs = 0;
     std::string env = "development";
     bool verbose = false;
+    bool watch = false;
     auto* build_cmd = app.add_subcommand("build", "Build the site");
     build_cmd->add_flag("--full", full_rebuild, "Force a clean rebuild (ignore cache)");
     build_cmd->add_flag("--drafts", include_drafts, "Include draft pages in output");
     build_cmd->add_option("-j,--jobs", jobs, "Number of parallel render threads (0 = auto)")->default_val(0);
     build_cmd->add_option("-e,--env", env, "Build environment (e.g. production)")->default_val("development");
     build_cmd->add_flag("-v,--verbose", verbose, "Show detailed build diagnostics (phase timing)");
-    build_cmd->callback([&full_rebuild, &include_drafts, &jobs, &env, &verbose]() { std::exit(cmd_build(full_rebuild, include_drafts, jobs, env, verbose)); });
+    build_cmd->add_flag("--watch", watch, "Rebuild on file changes (stay running until Ctrl+C)");
+    build_cmd->callback([&full_rebuild, &include_drafts, &jobs, &env, &verbose, &watch]() { std::exit(cmd_build(full_rebuild, include_drafts, jobs, env, verbose, watch)); });
 
     // serve subcommand
     int port = 3000;
@@ -496,7 +500,7 @@ int cmd_new(const std::string& path, const std::string& kind) {
     return cstatic::cli::generate_content(target, "archetypes", kind);
 }
 
-int cmd_build(bool full_rebuild, bool include_drafts, int jobs, const std::string& env, bool verbose) {
+int cmd_build(bool full_rebuild, bool include_drafts, int jobs, const std::string& env, bool verbose, bool watch) {
     try {
         cstatic::Config cfg = cstatic::load_config("config.toml", env);
 
@@ -568,6 +572,71 @@ int cmd_build(bool full_rebuild, bool include_drafts, int jobs, const std::strin
                 std::cout << result.assets_removed << " removed";
             }
             std::cout << "\n";
+        }
+
+        if (watch) {
+            // --- Watch mode: stay running, rebuild on file changes ---
+            std::cout << "\n  " << colorize(color::bold,
+                              colorize(color::green, "Watching for changes"))
+                      << "  " << colorize(color::dim, "(Ctrl+C to stop)\n\n") << std::flush;
+
+            // Same watch set the dev server uses: source, templates, static,
+            // and the project root (so config.toml / archetypes trigger too).
+            std::vector<std::string> watch_dirs;
+            for (const auto& dir : {cfg.source_dir, cfg.template_dir, cfg.static_dir, std::string(".")}) {
+                if (fs::exists(dir)) watch_dirs.push_back(dir);
+            }
+
+            // Rebuild callback — mirrors DevServer::rebuild_and_reload() minus
+            // the SSE broadcast. Reloads config each time so config.toml edits
+            // take effect without restart.
+            auto rebuild = [include_drafts]() {
+                try {
+                    cstatic::Config current = cstatic::load_config("config.toml");
+                    auto r = cstatic::build_site(current, false, include_drafts);
+
+                    // Stale-cache self-heal: retry as full rebuild if the
+                    // incremental pass reported no work and no errors.
+                    const bool suspicious_zero = current.incremental_enabled &&
+                        r.pages_built == 0 &&
+                        r.pages_cached == 0 &&
+                        r.errors.empty();
+                    if (suspicious_zero) {
+                        std::cerr << "  " << warning_label()
+                                  << " incremental rebuild reported no work; retrying as full rebuild\n";
+                        r = cstatic::build_site(current, true, include_drafts);
+                    }
+
+                    std::string msg;
+                    if (r.pages_cached > 0) {
+                        msg = "[" + std::to_string(static_cast<int>(r.elapsed_ms)) + "ms] " +
+                              std::to_string(r.pages_built) + " rebuilt, " +
+                              std::to_string(r.pages_cached) + " cached";
+                    } else {
+                        msg = "[" + std::to_string(static_cast<int>(r.elapsed_ms)) + "ms] " +
+                              std::to_string(r.pages_built) + " page(s) built";
+                    }
+                    std::cout << "  " << colorize(color::dim, msg) << "\n" << std::flush;
+                } catch (const std::exception& e) {
+                    std::cerr << "  " << error_label() << " rebuild failed: "
+                              << e.what() << "\n";
+                }
+            };
+
+            cstatic::FileWatcher file_watcher(std::move(watch_dirs), rebuild);
+
+            // SIGINT → stop the watcher. Function-local static so the C signal
+            // handler can reach it; safe to call from any thread.
+            static cstatic::FileWatcher* watcher_ptr = &file_watcher;
+            std::signal(SIGINT, [](int) {
+                if (watcher_ptr) watcher_ptr->stop();
+            });
+
+            // Blocks until SIGINT (or no dirs could be opened).
+            file_watcher.start();
+
+            std::cout << "\n  Stopped.\n";
+            return 0;
         }
 
         std::cout << success_label() << " Build complete.\n";

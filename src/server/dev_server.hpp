@@ -28,9 +28,6 @@ private:
     // Trigger an incremental rebuild and notify connected browsers.
     void rebuild_and_reload();
 
-    // --- File watching (platform-specific) ---
-    void watch_loop();
-
     // --- SSE live reload ---
     // Notify all connected SSE clients to reload.
     void broadcast_reload();

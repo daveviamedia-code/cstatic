@@ -104,6 +104,7 @@ add_executable(cstatic
     src/modules/search.cpp
     src/modules/og_images.cpp
     src/server/dev_server.cpp
+    src/server/file_watcher.cpp
     src/stb_impl.cpp
     src/template/renderer.cpp
     src/pipeline/builder.cpp

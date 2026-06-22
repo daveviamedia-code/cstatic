@@ -29,6 +29,7 @@ A fast, minimal static site generator written in C++17.
 - **Image optimization** — Resize, recompress, and convert images (WebP/AVIF) via stb
 - **Asset fingerprinting** — Content-based cache-busting with `{{ asset() }}` template helper
 - **Dev server** — Live-reload development server with file watching
+- **Watch mode** — `cstatic build --watch` rebuilds on file changes without running an HTTP server (useful for CI previews or proxying through a separate static server)
 - **Built-in modules** — Sitemap.xml, RSS feed, JSON Feed, and robots.txt generation
 - **Custom 404** — Automatic 404 page, or override with `src/404.md`
 - **Zero runtime deps** — Single static binary, no Node.js or Python required
@@ -101,6 +102,7 @@ cstatic serve              # Dev server at http://localhost:3000
 cstatic serve --port 8080  # Custom port
 cstatic build --full       # Force full rebuild (ignores cache)
 cstatic build -v           # Verbose: print per-phase build timing
+cstatic build --watch      # Rebuild on file changes (stay running until Ctrl+C)
 cstatic build --env production  # Build with config.production.toml overlay
 cstatic check              # Verify internal links in output/ (exits 1 on broken links)
 cstatic check --external   # Also probe external URLs via HTTP HEAD

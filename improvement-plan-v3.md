@@ -364,7 +364,7 @@ if (cfg.module_json_feed) modules::generate_json_feed(cfg, pages_array, cfg.outp
 
 ---
 
-## Feature 11: `--watch` for Build Mode
+## Feature 11: `--watch` for Build Mode ✅ DONE
 
 ### New files
 - **`src/server/file_watcher.hpp`** / **`.cpp`**: Extract platform-specific watching code from `dev_server.cpp:265-465` into reusable class:
@@ -424,7 +424,7 @@ While features are listed above with OG images as #1, the optimal build order gr
 | **B: Content Workflow** ✅ | #2 Shortcodes, #3 `cstatic new`, #9 Template Inheritance | Core authoring improvements; inheritance benefits shortcode templates |
 | **C: OG Images** ✅ | #1 OG Image Generation | The headline feature; benefits from stable pipeline |
 | **D: Content Intelligence** | #6 Backlinks, #5 Link Checker | Both analyze content relationships |
-| **E: Infrastructure** | #8 Incremental Dev, #11 `--watch`, #7 Multi-format | Performance and output flexibility |
+| **E: Infrastructure** ✅ (partial) | #8 Incremental Dev ✅, #11 `--watch` ✅, #7 Multi-format | Performance and output flexibility |
 
 Each phase can be committed independently. Features within a phase can be parallelized.
 

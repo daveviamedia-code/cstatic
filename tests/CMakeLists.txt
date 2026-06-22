@@ -26,6 +26,7 @@ set(LIB_SOURCES
     ${CMAKE_SOURCE_DIR}/src/modules/robots.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/search.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/og_images.cpp
+    ${CMAKE_SOURCE_DIR}/src/server/file_watcher.cpp
     ${CMAKE_SOURCE_DIR}/src/stb_impl.cpp
     ${CMAKE_SOURCE_DIR}/src/template/renderer.cpp
     ${CMAKE_SOURCE_DIR}/src/pipeline/builder.cpp
@@ -50,6 +51,7 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/tests/test_link_checker.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_link_graph.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_error_format.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_file_watcher.cpp
 )
 
 add_executable(cstatic_tests ${TEST_SOURCES} ${LIB_SOURCES})

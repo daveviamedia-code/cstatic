@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <nlohmann/json.hpp>
 #include <inja/inja.hpp>
+#include <regex>
 
 namespace cstatic {
 
@@ -58,14 +59,40 @@ public:
     // Set the asset manifest for {{ asset() }} lookups.
     void set_asset_manifest(const std::map<std::string, std::string>& manifest);
 
+    // Returns file paths of all ancestor templates (via {% extends %}).
+    // Used for incremental build dependency tracking.
+    std::vector<std::string> template_ancestors(const std::string& name) const;
+
 private:
     std::string template_dir_;
     mutable inja::Environment env_;
     mutable std::unordered_map<std::string, std::string> template_cache_;
+    mutable std::unordered_map<std::string, std::vector<std::string>> inheritance_deps_cache_;
     std::map<std::string, std::string> asset_manifest_;
 
     // Load a template file. Returns empty string if not found.
     std::string load_template(const std::string& name) const;
+
+    // --- Template inheritance ({% extends %} / {% block %}) ---
+    // Returns parent template name from {% extends "name" %}, or "" if none.
+    std::string has_extends(const std::string& raw) const;
+    // Recursively resolve extends chain, preserving block tags for unoverridden
+    // blocks so deeper levels can still override them.
+    std::string resolve_with_tags(const std::string& raw, int depth,
+                                   const std::string& name,
+                                   std::vector<std::string>& ancestors) const;
+    // Extract all {% block %}s from a child template → map<name, content>.
+    std::map<std::string, std::string> extract_blocks(const std::string& raw,
+                                                       const std::string& name) const;
+    // Walk a resolved parent, applying child overrides. When preserve_unoverridden
+    // is true, unoverridden blocks are re-wrapped so deeper levels can override.
+    std::string apply_blocks(const std::string& tmpl,
+                             const std::map<std::string, std::string>& overrides,
+                             bool preserve_unoverridden,
+                             const std::string& name) const;
+    // Remove all {% block %}/{% endblock %} tags, keeping default content.
+    std::string strip_blocks(const std::string& tmpl,
+                             const std::string& name) const;
 };
 
 } // namespace cstatic

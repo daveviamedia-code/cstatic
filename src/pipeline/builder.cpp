@@ -1084,6 +1084,11 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         if (!rp.template_path.empty()) {
             deps.push_back(rp.template_path);
         }
+        // Include ancestor templates (from {% extends %}) so editing a
+        // parent layout rebuilds dependent pages.
+        for (const auto& ancestor : renderer.template_ancestors(rp.parsed.frontmatter.layout)) {
+            deps.push_back(ancestor);
+        }
         deps.insert(deps.end(), shortcode_deps.begin(), shortcode_deps.end());
         // Structural deps: invalidate every page when the site graph changes.
         deps.push_back("meta:pages_array");
@@ -1252,6 +1257,9 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         std::vector<std::string> deps = {rp.source_path};
         if (!rp.template_path.empty()) {
             deps.push_back(rp.template_path);
+        }
+        for (const auto& ancestor : renderer.template_ancestors(rp.parsed.frontmatter.layout)) {
+            deps.push_back(ancestor);
         }
         deps.insert(deps.end(), shortcode_deps.begin(), shortcode_deps.end());
         // Structural deps: invalidate every page when the site graph changes.

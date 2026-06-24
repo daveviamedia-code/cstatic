@@ -3,7 +3,6 @@
 #include <filesystem>
 #include <fstream>
 #include <cstdlib>
-#include <unistd.h>
 
 #include "config/config.hpp"
 #include "pipeline/builder.hpp"
@@ -21,8 +20,7 @@ struct BenchFixture {
     std::string saved_cwd;
 
     BenchFixture() {
-        char buf[4096];
-        saved_cwd = getcwd(buf, sizeof(buf));
+        saved_cwd = fs::current_path().string();
 
         root_dir = fs::temp_directory_path() / ("cstatic_bench_" + std::to_string(std::rand()));
         fs::create_directories(root_dir);
@@ -34,11 +32,11 @@ struct BenchFixture {
         cstatic::utils::write_file(root_dir + "/config.toml",
             "[site]\ntitle = \"Bench Site\"\nbase_url = \"https://example.com\"\n");
 
-        chdir(root_dir.c_str());
+        fs::current_path(root_dir);
     }
 
     ~BenchFixture() {
-        chdir(saved_cwd.c_str());
+        fs::current_path(saved_cwd);
         fs::remove_all(root_dir);
     }
 

@@ -2,7 +2,6 @@
 #include <filesystem>
 #include <fstream>
 #include <cstdlib>
-#include <unistd.h>
 
 #include <nlohmann/json.hpp>
 
@@ -21,8 +20,7 @@ struct BuildFixture {
 
     BuildFixture() {
         // Save CWD
-        char buf[4096];
-        saved_cwd = getcwd(buf, sizeof(buf));
+        saved_cwd = fs::current_path().string();
 
         // Create temp directory
         root_dir = fs::temp_directory_path() / ("cstatic_test_" + std::to_string(std::rand()));
@@ -38,11 +36,11 @@ struct BuildFixture {
             "language = \"en\"\n");
 
         // Change to temp dir
-        chdir(root_dir.c_str());
+        fs::current_path(root_dir);
     }
 
     ~BuildFixture() {
-        chdir(saved_cwd.c_str());
+        fs::current_path(saved_cwd);
         fs::remove_all(root_dir);
     }
 

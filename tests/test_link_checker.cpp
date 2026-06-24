@@ -9,7 +9,6 @@
 #include <sstream>
 #include <string>
 #include <thread>
-#include <unistd.h>
 
 #include <httplib.h>
 
@@ -29,16 +28,15 @@ struct LinkFixture {
     std::string saved_cwd;
 
     LinkFixture() {
-        char buf[4096];
-        saved_cwd = getcwd(buf, sizeof(buf));
+        saved_cwd = fs::current_path().string();
         root_dir = (fs::temp_directory_path() /
                     ("cstatic_lc_" + std::to_string(std::rand()))).string();
         fs::create_directories(root_dir);
-        chdir(root_dir.c_str());
+        fs::current_path(root_dir);
     }
 
     ~LinkFixture() {
-        chdir(saved_cwd.c_str());
+        fs::current_path(saved_cwd);
         std::error_code ec;
         fs::remove_all(root_dir, ec);
     }

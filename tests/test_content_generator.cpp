@@ -3,7 +3,6 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
-#include <unistd.h>
 
 #include "cli/content_generator.hpp"
 
@@ -20,17 +19,16 @@ struct ContentFixture {
     std::string saved_cwd;
 
     ContentFixture() {
-        char buf[4096];
-        saved_cwd = getcwd(buf, sizeof(buf));
+        saved_cwd = fs::current_path().string();
         root_dir = fs::temp_directory_path() /
                    ("cstatic_cg_" + std::to_string(std::rand()));
         fs::create_directories(root_dir + "/src");
         fs::create_directories(root_dir + "/archetypes");
-        chdir(root_dir.c_str());
+        fs::current_path(root_dir);
     }
 
     ~ContentFixture() {
-        chdir(saved_cwd.c_str());
+        fs::current_path(saved_cwd);
         fs::remove_all(root_dir);
     }
 

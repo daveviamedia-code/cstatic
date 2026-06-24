@@ -2,7 +2,6 @@
 #include <filesystem>
 #include <fstream>
 #include <cstdlib>
-#include <unistd.h>
 
 #include "content/shortcodes.hpp"
 #include "utils/file_io.hpp"
@@ -20,17 +19,16 @@ struct ShortcodeFixture {
     std::string saved_cwd;
 
     ShortcodeFixture() {
-        char buf[4096];
-        saved_cwd = getcwd(buf, sizeof(buf));
+        saved_cwd = fs::current_path().string();
         root_dir = fs::temp_directory_path() /
                    ("cstatic_sc_" + std::to_string(std::rand()));
         fs::create_directories(root_dir);
         fs::create_directories(root_dir + "/shortcodes");
-        chdir(root_dir.c_str());
+        fs::current_path(root_dir);
     }
 
     ~ShortcodeFixture() {
-        chdir(saved_cwd.c_str());
+        fs::current_path(saved_cwd);
         fs::remove_all(root_dir);
     }
 

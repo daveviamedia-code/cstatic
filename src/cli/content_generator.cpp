@@ -7,6 +7,7 @@
 #include <iostream>
 #include <regex>
 #include <sstream>
+#include <filesystem>
 
 #include "utils/terminal.hpp"
 

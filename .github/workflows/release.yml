@@ -75,7 +75,7 @@ jobs:
           body: |
             ## C-Static ${{ github.ref_name }}
 
-            See [README](https://github.com/daveviamedia/c-static#readme) for usage instructions.
+            See [README](https://github.com/daveviamedia-code/cstatic#readme) for usage instructions.
 
             **Binaries:**
             - `cstatic-macos-arm64` — macOS (Apple Silicon)

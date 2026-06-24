@@ -1,0 +1,21 @@
+# C-Static
+
+> C-Static is a fast, minimal static site generator written in C++17. It ships as a single static binary with subcommands `init`, `new`, `build`, `serve`, and `check`. Configuration lives in `config.toml`; content is Markdown with YAML frontmatter under `src/`; templates are written in Inja (not Go/Liquid/Tera) under `templates/`; built output goes to `output/`. Deploy target is Cloudflare Workers via `git push`. No Node.js or Python runtime is required.
+
+Key facts for agents:
+- The template engine is **Inja**: `{{ var }}`, `{% for x in ys %}…{% endfor %}`, `{% if %}…{% endif %}`, `{% include "name" %}`, `{% extends "base" %}` + `{% block name %}`. There are no Hugo-style piped filters.
+- **Shortcodes** (`{{< name params >}}`) and **wikilinks** (`[[target]]`) expand to HTML *before* the cmark-gfm render pass, so emitted HTML passes through.
+- `build --env production` deep-merges tables and replaces scalars/arrays from `config.production.toml` on top of the base config.
+- Incremental builds are content-hash cached in `.cstatic_cache/`; when smoke-testing, force `cstatic build --full` before concluding something is broken.
+- `{{ asset("path") }}` resolves fingerprinted filenames (returns the path unchanged when fingerprinting is off); `{{ seo_meta }}` is always safe to add.
+
+## Docs
+
+- [AGENTS.md](AGENTS.md): Read this first. Comprehensive, instruction-oriented guide for an AI agent building or maintaining a C-Static site (recipes, config quick-ref, gotchas).
+- [docs/config.md](docs/config.md): Authoritative full configuration reference — every config key, module option, frontmatter SEO field, and `[check]` semantics.
+- [README.md](README.md): Human-oriented feature list, quick start, scaffold tree, frontmatter/template tables, and deploy flow.
+
+## Optional
+
+- [improvement-plan-v3.md](improvement-plan-v3.md): The v3 feature plan (context for how specific features — shortcodes, wikilinks, incremental dev rebuilds, template inheritance — were designed).
+- [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md): Shipped-feature history and architecture notes. Skippable for short context; useful when contributing to the C++ codebase.

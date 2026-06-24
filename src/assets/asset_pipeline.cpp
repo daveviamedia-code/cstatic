@@ -16,6 +16,7 @@
 #include <sstream>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <array>
 
 namespace cstatic {

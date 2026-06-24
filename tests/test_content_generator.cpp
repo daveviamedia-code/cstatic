@@ -20,8 +20,8 @@ struct ContentFixture {
 
     ContentFixture() {
         saved_cwd = fs::current_path().string();
-        root_dir = fs::temp_directory_path() /
-                   ("cstatic_cg_" + std::to_string(std::rand()));
+        root_dir = (fs::temp_directory_path() /
+                   ("cstatic_cg_" + std::to_string(std::rand()))).string();
         fs::create_directories(root_dir + "/src");
         fs::create_directories(root_dir + "/archetypes");
         fs::current_path(root_dir);

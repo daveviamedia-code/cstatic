@@ -23,7 +23,7 @@ struct BuildFixture {
         saved_cwd = fs::current_path().string();
 
         // Create temp directory
-        root_dir = fs::temp_directory_path() / ("cstatic_test_" + std::to_string(std::rand()));
+        root_dir = (fs::temp_directory_path() / ("cstatic_test_" + std::to_string(std::rand()))).string();
         fs::create_directories(root_dir);
         fs::create_directories(root_dir + "/src");
         fs::create_directories(root_dir + "/templates");

@@ -20,8 +20,8 @@ struct ShortcodeFixture {
 
     ShortcodeFixture() {
         saved_cwd = fs::current_path().string();
-        root_dir = fs::temp_directory_path() /
-                   ("cstatic_sc_" + std::to_string(std::rand()));
+        root_dir = (fs::temp_directory_path() /
+                   ("cstatic_sc_" + std::to_string(std::rand()))).string();
         fs::create_directories(root_dir);
         fs::create_directories(root_dir + "/shortcodes");
         fs::current_path(root_dir);

@@ -2,6 +2,7 @@
 
 #include <string>
 #include <stdexcept>
+#include <vector>
 
 namespace cstatic {
 

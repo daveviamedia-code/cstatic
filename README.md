@@ -32,6 +32,7 @@ A fast, minimal static site generator written in C++17.
 - **Watch mode** — `cstatic build --watch` rebuilds on file changes without running an HTTP server (useful for CI previews or proxying through a separate static server)
 - **Built-in modules** — Sitemap.xml, RSS feed, JSON Feed, and robots.txt generation
 - **Custom 404** — Automatic 404 page, or override with `src/404.md`
+- **Cloudflare Workers deploy** — `cstatic init` scaffolds `wrangler.jsonc` + a GitHub Actions workflow for push-to-deploy (Local → GitHub → Cloudflare Workers)
 - **Zero runtime deps** — Single static binary, no Node.js or Python required
 
 ## Quick Start
@@ -50,14 +51,19 @@ sudo cmake --install build
 
 ```bash
 mkdir my-site && cd my-site
-cstatic init
+cstatic init                      # site title defaults to "My Site"
+cstatic init --name "My Blog"     # custom title → config.toml + Cloudflare Worker name
 ```
+
+`--name` sets the site title in `config.toml` *and* the Cloudflare Worker name in `wrangler.jsonc` (slugified: `"My Blog"` → `my-blog`). Worker names are unique per Cloudflare account, so give each site a distinct name to avoid deploy collisions.
 
 This creates:
 
 ```
 .
 ├── config.toml           # Site configuration
+├── wrangler.jsonc        # Cloudflare Workers config (assets-only)
+├── .gitignore            # Ignores output/, cache, node_modules/
 ├── src/
 │   ├── index.md          # Home page
 │   ├── about.md          # Sample page
@@ -77,9 +83,12 @@ This creates:
 ├── archetypes/
 │   ├── default.md        # `cstatic new` template (title/date placeholders)
 │   └── post.md           # `cstatic new --kind post` template (starts as draft)
-└── static/
+├── static/
     ├── css/style.css     # Minimal reset
     └── js/app.js         # Placeholder
+└── .github/
+    └── workflows/
+        └── deploy.yml    # Push-to-deploy to Cloudflare Workers
 ```
 
 ### Create New Pages
@@ -379,6 +388,30 @@ Then use `category: tutorials` in frontmatter (string) or `category: [web, dev]`
 | JSON Feed| `modules.json_feed`   | `/feed.json`          |
 | Robots   | `modules.robots`      | `/robots.txt`         |
 | 404      | Automatic             | `/404.html`           |
+
+## Deployment
+
+`cstatic init` scaffolds everything you need to deploy to **Cloudflare Workers** via `git push` — no manual config required. The route is **Local → GitHub → Cloudflare Workers**.
+
+- **`wrangler.jsonc`** — an assets-only Worker. C-Static's `output/` is served directly (no Worker script runs), with `/404.html` handling unmatched paths.
+- **`.github/workflows/deploy.yml`** — on push to `main`, downloads the latest `cstatic` release binary, runs `cstatic build --env production`, and deploys `output/` to Cloudflare Workers.
+
+### One-time setup
+
+1. Add two repository secrets (*Settings → Secrets and variables → Actions*):
+   - `CLOUDFLARE_API_TOKEN` — a token with **Workers Scripts: Edit** + **Account: Read**
+   - `CLOUDFLARE_ACCOUNT_ID` — your Cloudflare account ID
+2. Push to `main`. The first run creates the Worker; later runs update it.
+3. *(Optional)* Add a custom domain in the Cloudflare dashboard, or a `config.production.toml` overlay for production-only settings.
+
+> The workflow fetches `cstatic` from `CSTATIC_REPO` (default `daveviamedia-code/cstatic`, set at the top of `deploy.yml`). Change it if you fork or publish the binary elsewhere.
+
+To deploy manually instead:
+
+```bash
+cstatic build --env production
+npx wrangler deploy
+```
 
 ## Building from Source
 

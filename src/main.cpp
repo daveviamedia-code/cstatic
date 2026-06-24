@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 #include <csignal>
+#include <cctype>
+#include <ctime>
 
 #include "cli/content_generator.hpp"
 #include "cli/error_format.hpp"
@@ -19,7 +21,7 @@
 namespace fs = std::filesystem;
 using namespace cstatic::utils;
 
-int cmd_init();
+int cmd_init(const std::string& name);
 int cmd_new(const std::string& path, const std::string& kind);
 int cmd_build(bool full_rebuild, bool include_drafts, int jobs, const std::string& env, bool verbose, bool watch);
 int cmd_serve(int port, bool include_drafts, const std::string& env);
@@ -32,8 +34,11 @@ int main(int argc, char** argv) {
     app.set_version_flag("--version", CSTATIC_VERSION);
 
     // init subcommand
+    std::string init_name;
     auto* init_cmd = app.add_subcommand("init", "Scaffold a new project");
-    init_cmd->callback([]() { std::exit(cmd_init()); });
+    init_cmd->add_option("--name", init_name,
+        "Site name (sets config.toml title and the Cloudflare Worker name)");
+    init_cmd->callback([&init_name]() { std::exit(cmd_init(init_name)); });
 
     // new subcommand — create content from an archetype
     std::string new_path, new_kind;
@@ -98,7 +103,54 @@ static void print_created(const std::string& path) {
     std::cout << "  " << colorize(color::green, "created") << "  " << path << "\n";
 }
 
-int cmd_init() {
+// Build a Cloudflare Worker name from a site title.
+// Worker names: lowercase [a-z0-9-], must start with a letter, <= 63 chars.
+static std::string worker_name_from_title(const std::string& title) {
+    std::string out;
+    bool prev_dash = false;
+    for (unsigned char c : title) {
+        if (std::isalpha(c) || std::isdigit(c)) {
+            out.push_back(static_cast<char>(std::tolower(c)));
+            prev_dash = false;
+        } else if (!out.empty() && !prev_dash) {
+            out.push_back('-');
+            prev_dash = true;
+        }
+    }
+    while (!out.empty() && out.back() == '-') out.pop_back();
+    if (out.size() > 63) out.resize(63);
+    while (!out.empty() && out.back() == '-') out.pop_back();
+    if (out.empty()) return "my-site";
+    if (!std::isalpha(static_cast<unsigned char>(out.front()))) out = "site-" + out;
+    return out;
+}
+
+// Today's date as YYYY-MM-DD (for wrangler compatibility_date).
+static std::string current_date_iso() {
+    std::time_t t = std::time(nullptr);
+    std::tm tm{};
+#if defined(_WIN32)
+    localtime_s(&tm, &t);
+#else
+    localtime_r(&t, &tm);
+#endif
+    char buf[16];
+    std::strftime(buf, sizeof(buf), "%Y-%m-%d", &tm);
+    return buf;
+}
+
+// Escape a string for a TOML basic (double-quoted) string.
+static std::string toml_escape(const std::string& s) {
+    std::string out;
+    out.reserve(s.size());
+    for (char c : s) {
+        if (c == '"' || c == '\\') out.push_back('\\');
+        out.push_back(c);
+    }
+    return out;
+}
+
+int cmd_init(const std::string& name) {
     // Check if config.toml already exists
     if (fs::exists("config.toml")) {
         std::cerr << error_label() << " config.toml already exists in this directory.\n"
@@ -107,6 +159,10 @@ int cmd_init() {
     }
 
     std::cout << colorize(color::bold, "Scaffolding new C-Static project...\n\n");
+
+    // Site title: from --name, defaulting to "My Site". Drives config.toml's
+    // title and the Cloudflare Worker name in wrangler.jsonc.
+    const std::string site_title = name.empty() ? "My Site" : name;
 
     // Create directories
     fs::create_directories("src");
@@ -117,13 +173,14 @@ int cmd_init() {
     fs::create_directories("static/js");
     fs::create_directories("shortcodes");
     fs::create_directories("archetypes");
+    fs::create_directories(".github/workflows");
 
     // config.toml
     const char* config_toml = R"(# C-Static Site Configuration
 # Full docs: https://github.com/daveviamedia-code/cstatic
 
 [site]
-title = "My Site"
+title = "%SITE_TITLE%"
 base_url = "https://example.com"
 language = "en"
 
@@ -446,9 +503,75 @@ draft: true
 # {{ title }}
 )";
 
+    // .github/workflows/deploy.yml — push-to-deploy to Cloudflare Workers.
+    // Downloads the cstatic release binary (no C++ toolchain needed in CI),
+    // builds the site, and uploads output/ as a Worker's static assets.
+    const char* deploy_yml = R"YAML(# Deploys the built site to Cloudflare Workers on every push to main.
+# Requires two repository secrets (Settings -> Secrets and variables -> Actions):
+#   CLOUDFLARE_API_TOKEN  - token with "Workers Scripts: Edit" + "Account: Read"
+#   CLOUDFLARE_ACCOUNT_ID - your Cloudflare account ID
+# First run creates the Worker; later runs update it.
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+env:
+  # GitHub repo that publishes the cstatic release binary. Change if you fork.
+  CSTATIC_REPO: daveviamedia-code/cstatic
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download cstatic
+        run: |
+          curl -fsSL "https://github.com/${CSTATIC_REPO}/releases/latest/download/cstatic-linux-x86_64" -o cstatic
+          chmod +x cstatic
+
+      - name: Build site
+        run: ./cstatic build --env production
+
+      - name: Deploy to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy
+)YAML";
+
+    // .gitignore — keep build output and tooling caches out of the repo.
+    const char* gitignore = R"GIT(# C-Static build output & cache
+output/
+.cstatic_cache/
+
+# Wrangler / Node (only relevant if you install wrangler locally)
+.wrangler/
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+)GIT";
+
+    // config.toml title is templated from --name (escaped for TOML).
+    std::string config_content = config_toml;
+    {
+        const std::string marker = "%SITE_TITLE%";
+        size_t pos = config_content.find(marker);
+        if (pos != std::string::npos) {
+            config_content.replace(pos, marker.size(), toml_escape(site_title));
+        }
+    }
+
     // Write all files
-    struct { const char* path; const char* content; } files[] = {
-        {"config.toml",              config_toml},
+    struct { const char* path; std::string content; } files[] = {
+        {"config.toml",              config_content},
         {"src/index.md",             index_md},
         {"src/about.md",             about_md},
         {"src/posts/first-post.md",  first_post_md},
@@ -466,6 +589,8 @@ draft: true
         {"archetypes/post.md",       archetype_post_md},
         {"static/css/style.css",     style_css},
         {"static/js/app.js",         app_js},
+        {".github/workflows/deploy.yml", deploy_yml},
+        {".gitignore",               gitignore},
     };
 
     for (const auto& f : files) {
@@ -475,12 +600,41 @@ draft: true
         print_created(f.path);
     }
 
+    // wrangler.jsonc — Cloudflare Workers config (assets-only, no Worker script).
+    // Templated: worker name slugified from the site title, compatibility date
+    // set to today.
+    {
+        std::string worker_name = worker_name_from_title(site_title);
+        std::string today = current_date_iso();
+        std::string wrangler_jsonc =
+            "{\n"
+            "  // Cloudflare Worker name (lowercase). Edit freely; must be unique\n"
+            "  // per account. No \"main\" field => Cloudflare serves ./output as\n"
+            "  // static files directly (no Worker code runs).\n"
+            "  \"name\": \"" + worker_name + "\",\n"
+            "  // Date you first developed against Cloudflare's runtime.\n"
+            "  \"compatibility_date\": \"" + today + "\",\n"
+            "  \"assets\": {\n"
+            "    \"directory\": \"./output\",\n"
+            "    // C-Static emits output/404.html; serve it for unmatched paths.\n"
+            "    \"not_found_handling\": \"404-page\"\n"
+            "  }\n"
+            "}\n";
+        if (!write_scaffold_file("wrangler.jsonc", wrangler_jsonc)) return 1;
+        print_created("wrangler.jsonc");
+    }
+
     std::cout << "\n" << success_label() << " Project scaffolded.\n\n"
               << colorize(color::bold, "Next steps:\n")
               << "  1. Edit " << colorize(color::cyan, "src/index.md") << " to customize your home page\n"
               << "  2. Run " << colorize(color::cyan, "cstatic serve") << " to preview at "
               << colorize(color::cyan, "http://localhost:3000") << "\n"
-              << "  3. Run " << colorize(color::cyan, "cstatic build") << " to generate the output\n";
+              << "  3. Run " << colorize(color::cyan, "cstatic build") << " to generate the output\n"
+              << "  4. Push to " << colorize(color::cyan, "GitHub")
+              << " to deploy to Cloudflare Workers (set "
+              << colorize(color::cyan, "CLOUDFLARE_API_TOKEN") << " + "
+              << colorize(color::cyan, "CLOUDFLARE_ACCOUNT_ID")
+              << " secrets; see " << colorize(color::cyan, ".github/workflows/deploy.yml") << ")\n";
 
     return 0;
 }

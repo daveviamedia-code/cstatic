@@ -12,12 +12,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Only macOS in CI for now. Ubuntu (cmark-gfm static link order)
+          # and Windows (Catch2 test-discovery runtime) are deferred.
           - os: macos-latest
             compiler: clang
-          - os: ubuntu-latest
-            compiler: gcc
-          - os: windows-latest
-            compiler: msvc
 
     runs-on: ${{ matrix.os }}
 

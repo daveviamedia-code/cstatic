@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(cstatic VERSION 0.3.0 LANGUAGES CXX)
+project(cstatic VERSION 0.4.0 LANGUAGES CXX)
 
 # Policy override for dependency compatibility (yaml-cpp requires older CMake minimum)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE INTERNAL "")

@@ -127,6 +127,8 @@ rss_item_count = 50
 robots_user_agent = "GoogleBot"
 robots_include_sitemap = false
 robots_disallow = ["/admin", "/private"]
+robots_ai_crawlers_mode = "custom"
+robots_ai_crawlers_custom = ["GPTBot", "ClaudeBot"]
 
 [data]
 data_dir = "data"
@@ -156,6 +158,9 @@ per_item = true
     REQUIRE(cfg.rss_item_count == 50);
     REQUIRE(cfg.rss_title == "Full RSS");
     REQUIRE(cfg.robots_disallow.size() == 2);
+    REQUIRE(cfg.robots_ai_crawlers_mode == "custom");
+    REQUIRE(cfg.robots_ai_crawlers_custom.size() == 2);
+    REQUIRE(cfg.robots_ai_crawlers_custom[0] == "GPTBot");
     REQUIRE(cfg.data_sources.size() == 1);
     REQUIRE(cfg.data_sources[0].file == "products.json");
     REQUIRE(cfg.data_sources[0].per_page == 10);
@@ -186,7 +191,22 @@ base_url = "https://example.com"
     REQUIRE(cfg.module_rss == false);
     REQUIRE(cfg.module_json_feed == false);
     REQUIRE(cfg.module_robots == false);
+    REQUIRE(cfg.robots_ai_crawlers_mode == "off");
+    REQUIRE(cfg.robots_ai_crawlers_custom.empty());
     REQUIRE(cfg.data_dir == "_data");
+    fs::remove(path);
+}
+
+TEST_CASE_METHOD(ConfigFixture, "Config: invalid robots_ai_crawlers_mode rejected", "[config]") {
+    std::string path = write_temp_config(R"(
+[site]
+title = "AI Test"
+base_url = "https://example.com"
+[modules]
+robots = true
+robots_ai_crawlers_mode = "welcome"
+)");
+    REQUIRE_THROWS_AS(cstatic::load_config(path), cstatic::ConfigError);
     fs::remove(path);
 }
 

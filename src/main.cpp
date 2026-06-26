@@ -208,6 +208,8 @@ sitemap = true
 rss = false
 json_feed = false
 robots = false
+# To welcome AI/LLM crawlers (ChatGPT, Perplexity, Google AI Overviews), set:
+# robots_ai_crawlers_mode = "allow"   # or "disallow" / "custom"
 
 [[collection]]
 name = "posts"

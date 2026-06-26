@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-06-26
+
+### Added
+- AI crawler allowlist for `robots.txt` — `[modules] robots_ai_crawlers_mode` (`off` | `allow` | `disallow` | `custom`) emits per-crawler blocks for known AI/LLM crawlers (GPTBot, OAI-SearchBot, ClaudeBot, PerplexityBot, Perplexity-User, CCBot, Google-Extended, Applebot-Extended, Meta-ExternalAgent, Amazonbot, Bytespider, Diffbot) so AI search engines can crawl and cite your content. Default `off` preserves existing output.
+
+### Fixed
+- TOML config examples in `docs/config.md` and `skills/cstatic-configure-seo.md` used a `[modules]` header combined with dotted `modules.X` keys, which silently created a nested table and never applied. Examples moved to bare-key form.
+
 ## [0.3.0] - 2026-06-24
 
 ### Added

@@ -52,6 +52,7 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/tests/test_link_graph.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_error_format.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_file_watcher.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_robots.cpp
 )
 
 add_executable(cstatic_tests ${TEST_SOURCES} ${LIB_SOURCES})

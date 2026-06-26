@@ -1,6 +1,6 @@
 ---
 name: cstatic-configure-seo
-description: Configure SEO and feeds for a C-Static site. Use when the user says "enable sitemap", "RSS feed", "JSON feed", "robots.txt", "OG images", "social cards", "seo_meta", or "SEO setup". Covers modules, {{ seo_meta }}, og_images, and sitemap excludes.
+description: Configure SEO and feeds for a C-Static site. Use when the user says "enable sitemap", "RSS feed", "JSON feed", "robots.txt", "OG images", "social cards", "seo_meta", "SEO setup", "AI crawlers", "GEO", or "allow GPTBot/ClaudeBot". Covers modules, {{ seo_meta }}, og_images, AI crawler allowlist, and sitemap excludes.
 ---
 
 # Skill: Configure SEO & feeds
@@ -19,15 +19,23 @@ C-Static can generate a sitemap, RSS feed, JSON Feed, robots.txt, and per-page s
    robots = true                  # /robots.txt
 
    # Shared feed metadata (rss + json_feed both use these):
-   modules.rss_title = "My Site Feed"
-   modules.rss_description = "Latest posts from My Site"
-   modules.rss_item_count = 20
-   modules.json_feed_output = "feed.json"
+   rss_title = "My Site Feed"
+   rss_description = "Latest posts from My Site"
+   rss_item_count = 20
+   json_feed_output = "feed.json"
 
    # robots.txt tuning:
-   modules.robots_user_agent = "*"
-   modules.robots_include_sitemap = true
-   modules.robots_disallow = ["/admin/"]
+   robots_user_agent = "*"
+   robots_include_sitemap = true
+   robots_disallow = ["/admin/"]
+
+   # AI/LLM crawlers (GEO): "off" | "allow" | "disallow" | "custom".
+   # "allow" emits Allow:/ for GPTBot, ClaudeBot, PerplexityBot, etc. so AI
+   # search (ChatGPT, Perplexity, Google AI Overviews) can cite your pages.
+   robots_ai_crawlers_mode = "allow"
+   # "custom" allows only the listed agents:
+   # robots_ai_crawlers_mode = "custom"
+   # robots_ai_crawlers_custom = ["GPTBot", "ClaudeBot"]
    ```
 
 2. **Add `{{ seo_meta }}` to every layout's `<head>`** (typically in `templates/base.html` or `templates/default.html`). It emits `<meta name="description">`, Open Graph (`og:title`, `og:description`, `og:url`, `og:image`), Twitter Card, and `<link rel="canonical">`. Missing variables render empty, so adding it is always safe.

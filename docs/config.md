@@ -498,13 +498,22 @@ When `modules.robots = true`, these keys customize `robots.txt`:
 | `modules.robots_user_agent` | string | `"*"` | User-agent directive value |
 | `modules.robots_include_sitemap` | bool | `true` | Automatically add a `Sitemap:` line pointing to `sitemap.xml` |
 | `modules.robots_disallow` | string[] | `[]` | List of `Disallow` paths |
+| `modules.robots_ai_crawlers_mode` | string | `"off"` | AI/LLM crawler handling: `"off"` (no AI blocks), `"allow"` (`Allow: /` each known agent), `"disallow"` (`Disallow: /` each), or `"custom"` (allow only `robots_ai_crawlers_custom`) |
+| `modules.robots_ai_crawlers_custom` | string[] | `[]` | Agent names to allow when mode is `"custom"` (e.g. `["GPTBot", "ClaudeBot"]`) |
+
+Known AI agents (used by `allow`/`disallow`): `GPTBot`, `OAI-SearchBot`, `ClaudeBot`, `PerplexityBot`, `Perplexity-User`, `CCBot`, `Google-Extended`, `Applebot-Extended`, `Meta-ExternalAgent`, `Amazonbot`, `Bytespider`, `Diffbot`.
 
 ```toml
 [modules]
 robots = true
-modules.robots_user_agent = "*"
-modules.robots_include_sitemap = true
-modules.robots_disallow = ["/admin/", "/private/"]
+robots_user_agent = "*"
+robots_include_sitemap = true
+robots_disallow = ["/admin/", "/private/"]
+# Welcome AI/LLM crawlers so your content can be cited by AI search:
+robots_ai_crawlers_mode = "allow"
+# ...or allow only specific agents:
+# robots_ai_crawlers_mode = "custom"
+# robots_ai_crawlers_custom = ["GPTBot", "ClaudeBot", "PerplexityBot"]
 ```
 
 ---

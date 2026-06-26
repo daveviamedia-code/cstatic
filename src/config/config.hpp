@@ -99,6 +99,15 @@ struct Config {
     bool        robots_include_sitemap = true;
     std::vector<std::string> robots_disallow;
 
+    // [modules.robots.ai_crawlers]
+    // Known AI/LLM crawlers (GPTBot, ClaudeBot, PerplexityBot, ...). Mode is
+    // "off" (emit nothing — default, preserves single-block robots.txt),
+    // "allow" (emit `Allow: /` for each known agent), "disallow" (emit
+    // `Disallow: /` for each), or "custom" (emit `Allow: /` only for the
+    // agents listed in robots_ai_crawlers_custom).
+    std::string robots_ai_crawlers_mode = "off";
+    std::vector<std::string> robots_ai_crawlers_custom;
+
     // [sitemap]
     std::vector<std::string> sitemap_exclude;
 

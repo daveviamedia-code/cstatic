@@ -216,7 +216,7 @@ Full reference: `docs/config.md`. Most-used keys:
 | `[build.highlight]` | `enabled`, `style` | `true`, `"github"` | `style` ∈ `github` \| `github-dark`. Writes `css/highlight.css`. |
 | `[build.images]` | `optimize`, `max_width`, `quality`, `webp`, `avif` | `optimize=false` | webp/avif need `cwebp`/`avifenc` on PATH. |
 | `[build.markdown]` | `extensions`, `shortcodes_dir`, `wikilinks` | all ext / `shortcodes` / `false` | `extensions` ∈ `table`,`tasklist`,`strikethrough`,`autolink`. |
-| `[modules]` | `sitemap`, `rss`, `json_feed`, `robots` | `T`/`F`/`F`/`F` | Plus `rss_title`/`rss_description`/`rss_item_count`, `json_feed_output`, `robots_*`. |
+| `[modules]` | `sitemap`, `rss`, `json_feed`, `robots` | `T`/`F`/`F`/`F` | Plus `rss_title`/`rss_description`/`rss_item_count`, `json_feed_output`, `robots_*` (incl. `robots_ai_crawlers_mode` ∈ `off`\|`allow`\|`disallow`\|`custom` + `robots_ai_crawlers_custom`). |
 | `[og_images]` | `enabled`, `template`, `output_format`, `width`, `height`, `output_dir` | `F`/`og-default`/`png`/`1200`/`630`/`og` | PNG needs rsvg-convert/convert/inkscape. |
 | `[sitemap]` | `exclude` | `[]` | URL paths to drop. |
 | `[data]` | `data_dir` | `_data` | |

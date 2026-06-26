@@ -274,6 +274,19 @@ Config load_config(const std::string& path, const std::string& env) {
     cfg.robots_include_sitemap = optional_bool(tbl, "modules.robots_include_sitemap", cfg.robots_include_sitemap);
     cfg.robots_disallow        = optional_string_array(tbl, "modules.robots_disallow");
 
+    // --- [modules.robots.ai_crawlers] ---
+    cfg.robots_ai_crawlers_mode   = optional_string(tbl, "modules.robots_ai_crawlers_mode", cfg.robots_ai_crawlers_mode);
+    cfg.robots_ai_crawlers_custom = optional_string_array(tbl, "modules.robots_ai_crawlers_custom");
+    {
+        const std::string& m = cfg.robots_ai_crawlers_mode;
+        if (m != "off" && m != "allow" && m != "disallow" && m != "custom") {
+            throw ConfigError(
+                utils::error_label() + " config.toml: 'modules.robots_ai_crawlers_mode' "
+                "must be one of \"off\", \"allow\", \"disallow\", \"custom\", got \"" + m + "\""
+            );
+        }
+    }
+
     // --- [sitemap] ---
     cfg.sitemap_exclude = optional_string_array(tbl, "sitemap.exclude");
 
@@ -410,6 +423,8 @@ std::string config_to_json(const Config& cfg) {
     j["modules"]["robots_user_agent"]       = cfg.robots_user_agent;
     j["modules"]["robots_include_sitemap"]  = cfg.robots_include_sitemap;
     j["modules"]["robots_disallow"]         = cfg.robots_disallow;
+    j["modules"]["robots_ai_crawlers_mode"]   = cfg.robots_ai_crawlers_mode;
+    j["modules"]["robots_ai_crawlers_custom"] = cfg.robots_ai_crawlers_custom;
 
     j["sitemap"]["exclude"] = cfg.sitemap_exclude;
 

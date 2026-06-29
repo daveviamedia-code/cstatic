@@ -192,6 +192,7 @@ Config load_config(const std::string& path, const std::string& env) {
     cfg.site_base_url = require_string(tbl, "site.base_url");
     cfg.site_language  = optional_string(tbl, "site.language", cfg.site_language);
     cfg.site_twitter_handle = optional_string(tbl, "site.twitter_handle", cfg.site_twitter_handle);
+    cfg.site_description    = optional_string(tbl, "site.description", cfg.site_description);
 
     // Validate base_url looks like a URL
     if (cfg.site_base_url.find("://") == std::string::npos) {
@@ -268,6 +269,12 @@ Config load_config(const std::string& path, const std::string& env) {
 
     // --- [modules.json_feed] ---
     cfg.json_feed_output = optional_string(tbl, "modules.json_feed_output", cfg.json_feed_output);
+
+    // --- [modules.llms_txt] ---
+    cfg.module_llms_txt     = optional_bool(tbl, "modules.llms_txt", cfg.module_llms_txt);
+    cfg.llms_txt_description = optional_string(tbl, "modules.llms_txt_description", cfg.llms_txt_description);
+    cfg.llms_txt_max_pages  = optional_int(tbl, "modules.llms_txt_max_pages", cfg.llms_txt_max_pages);
+    cfg.llms_txt_exclude    = optional_string_array(tbl, "modules.llms_txt_exclude");
 
     // --- [modules.robots] ---
     cfg.robots_user_agent      = optional_string(tbl, "modules.robots_user_agent", cfg.robots_user_agent);
@@ -369,6 +376,7 @@ std::string config_to_json(const Config& cfg) {
     j["site"]["base_url"] = cfg.site_base_url;
     j["site"]["language"] = cfg.site_language;
     j["site"]["twitter_handle"] = cfg.site_twitter_handle;
+    j["site"]["description"] = cfg.site_description;
     j["site"]["env"] = cfg.env;
 
     j["build"]["source_dir"]   = cfg.source_dir;
@@ -419,6 +427,11 @@ std::string config_to_json(const Config& cfg) {
     j["modules"]["rss_item_count"]  = cfg.rss_item_count;
 
     j["modules"]["json_feed_output"] = cfg.json_feed_output;
+
+    j["modules"]["llms_txt"]              = cfg.module_llms_txt;
+    j["modules"]["llms_txt_description"]  = cfg.llms_txt_description;
+    j["modules"]["llms_txt_max_pages"]    = cfg.llms_txt_max_pages;
+    j["modules"]["llms_txt_exclude"]      = cfg.llms_txt_exclude;
 
     j["modules"]["robots_user_agent"]       = cfg.robots_user_agent;
     j["modules"]["robots_include_sitemap"]  = cfg.robots_include_sitemap;

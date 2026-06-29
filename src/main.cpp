@@ -210,6 +210,7 @@ json_feed = false
 robots = false
 # To welcome AI/LLM crawlers (ChatGPT, Perplexity, Google AI Overviews), set:
 # robots_ai_crawlers_mode = "allow"   # or "disallow" / "custom"
+# llms_txt = false  # emit /llms.txt + /llms-full.txt for LLM crawlers
 
 [[collection]]
 name = "posts"

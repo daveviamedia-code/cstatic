@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(cstatic VERSION 0.4.0 LANGUAGES CXX)
+project(cstatic VERSION 0.5.0 LANGUAGES CXX)
 
 # Policy override for dependency compatibility (yaml-cpp requires older CMake minimum)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE INTERNAL "")
@@ -100,6 +100,7 @@ add_executable(cstatic
     src/modules/sitemap.cpp
     src/modules/rss.cpp
     src/modules/json_feed.cpp
+    src/modules/llms_txt.cpp
     src/modules/robots.cpp
     src/modules/search.cpp
     src/modules/og_images.cpp

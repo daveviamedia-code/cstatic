@@ -1,6 +1,7 @@
 #include "modules/sitemap.hpp"
 #include "config/config.hpp"
 #include "utils/file_io.hpp"
+#include "utils/glob.hpp"
 
 #include <nlohmann/json.hpp>
 #include <filesystem>
@@ -11,34 +12,8 @@ namespace modules {
 
 namespace {
 
-// Simple glob match supporting '*' (any chars) only.
-bool glob_match(const std::string& pattern, const std::string& text) {
-    auto pit = pattern.begin();
-    auto tit = text.begin();
-
-    while (pit != pattern.end() && tit != text.end()) {
-        if (*pit == '*') {
-            ++pit;
-            // '*' matches zero or more of any character
-            if (pit == pattern.end()) return true; // trailing * matches rest
-            // Find the next occurrence of the char after *
-            while (tit != text.end() && *tit != *pit) ++tit;
-        } else {
-            if (*pit != *tit) return false;
-            ++pit;
-            ++tit;
-        }
-    }
-    // Consume trailing wildcards
-    while (pit != pattern.end() && *pit == '*') ++pit;
-    return pit == pattern.end() && tit == text.end();
-}
-
 bool is_excluded(const std::string& url, const std::vector<std::string>& patterns) {
-    for (const auto& pat : patterns) {
-        if (glob_match(pat, url)) return true;
-    }
-    return false;
+    return utils::matches_any_glob(url, patterns);
 }
 
 } // anonymous namespace

@@ -10,6 +10,7 @@
 #include "modules/sitemap.hpp"
 #include "modules/rss.hpp"
 #include "modules/json_feed.hpp"
+#include "modules/llms_txt.hpp"
 #include "modules/robots.hpp"
 #include "modules/search.hpp"
 #include "modules/og_images.hpp"
@@ -1579,6 +1580,9 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         }
         if (cfg.module_json_feed) {
             modules::generate_json_feed(cfg, pages_array, cfg.output_dir);
+        }
+        if (cfg.module_llms_txt) {
+            modules::generate_llms_txt(cfg, pages_array, cfg.output_dir);
         }
         if (cfg.module_robots) {
             modules::generate_robots(cfg, cfg.output_dir);

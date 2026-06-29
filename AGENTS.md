@@ -151,10 +151,13 @@ sitemap = true              # /sitemap.xml (default true)
 rss = true                  # /feed.xml
 json_feed = true            # /feed.json
 robots = true               # /robots.txt
+llms_txt = true             # /llms.txt + /llms-full.txt (GEO; LLM crawlers)
 modules.rss_title = "My Site Feed"          # shared with json_feed
 modules.rss_description = "Latest posts"
 modules.rss_item_count = 20
 modules.json_feed_output = "feed.json"
+modules.llms_txt_max_pages = 0              # 0 = no cap; llms-full.txt always complete
+modules.llms_txt_exclude = ["/tags/*"]      # glob against page URLs
 
 [og_images]
 enabled = true             # per-page social cards from an SVG template
@@ -216,7 +219,7 @@ Full reference: `docs/config.md`. Most-used keys:
 | `[build.highlight]` | `enabled`, `style` | `true`, `"github"` | `style` ∈ `github` \| `github-dark`. Writes `css/highlight.css`. |
 | `[build.images]` | `optimize`, `max_width`, `quality`, `webp`, `avif` | `optimize=false` | webp/avif need `cwebp`/`avifenc` on PATH. |
 | `[build.markdown]` | `extensions`, `shortcodes_dir`, `wikilinks` | all ext / `shortcodes` / `false` | `extensions` ∈ `table`,`tasklist`,`strikethrough`,`autolink`. |
-| `[modules]` | `sitemap`, `rss`, `json_feed`, `robots` | `T`/`F`/`F`/`F` | Plus `rss_title`/`rss_description`/`rss_item_count`, `json_feed_output`, `robots_*` (incl. `robots_ai_crawlers_mode` ∈ `off`\|`allow`\|`disallow`\|`custom` + `robots_ai_crawlers_custom`). |
+| `[modules]` | `sitemap`, `rss`, `json_feed`, `robots`, `llms_txt` | `T`/`F`/`F`/`F`/`F` | Plus `rss_title`/`rss_description`/`rss_item_count`, `json_feed_output`, `llms_txt_description`/`llms_txt_max_pages`/`llms_txt_exclude`, `robots_*` (incl. `robots_ai_crawlers_mode` ∈ `off`\|`allow`\|`disallow`\|`custom` + `robots_ai_crawlers_custom`). `llms_txt` writes `/llms.txt` + `/llms-full.txt`; summary falls back to `site.description`. |
 | `[og_images]` | `enabled`, `template`, `output_format`, `width`, `height`, `output_dir` | `F`/`og-default`/`png`/`1200`/`630`/`og` | PNG needs rsvg-convert/convert/inkscape. |
 | `[sitemap]` | `exclude` | `[]` | URL paths to drop. |
 | `[data]` | `data_dir` | `_data` | |

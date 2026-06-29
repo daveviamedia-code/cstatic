@@ -12,6 +12,7 @@ All settings live in `config.toml` at the project root.
 | `base_url` | string | — | Yes | Full URL (e.g. `"https://example.com"`). Trailing slash is stripped automatically. |
 | `language` | string | `"en"` | No | Language code, used in `<html lang="{{ site.language }}">` |
 | `twitter_handle` | string | — | No | Twitter/X handle (e.g. `"@username"`), used in `{{ seo_meta }}` twitter:site tag |
+| `description` | string | — | No | Site summary; used as the `llms.txt` `>` line fallback when `modules.llms_txt_description` is unset |
 
 ```toml
 [site]
@@ -19,6 +20,7 @@ title = "My Site"
 base_url = "https://example.com"
 language = "en"
 twitter_handle = "@username"
+description = "A concise summary of what this site is about."
 ```
 
 ---
@@ -438,6 +440,7 @@ A default `templates/og-default.svg` (1200×630) is scaffolded by `cstatic init`
 | `rss` | bool | `false` | Generate RSS feed at `feed.xml` |
 | `json_feed` | bool | `false` | Generate JSON Feed 1.1 at `feed.json` |
 | `robots` | bool | `false` | Generate `robots.txt` |
+| `llms_txt` | bool | `false` | Generate `llms.txt` + `llms-full.txt` for LLM crawlers |
 
 ```toml
 [modules]
@@ -445,6 +448,7 @@ sitemap = true
 rss = false
 json_feed = false
 robots = false
+llms_txt = false
 ```
 
 ### RSS Options
@@ -514,6 +518,36 @@ robots_ai_crawlers_mode = "allow"
 # ...or allow only specific agents:
 # robots_ai_crawlers_mode = "custom"
 # robots_ai_crawlers_custom = ["GPTBot", "ClaudeBot", "PerplexityBot"]
+```
+
+### llms.txt Options
+
+When `modules.llms_txt = true`, C-Static generates two files following the
+[llms.txt spec](https://llmstxt.org), an emerging convention for LLM crawlers:
+
+- `llms.txt` — compact catalog, honors `llms_txt_max_pages` (0 = no cap)
+- `llms-full.txt` — every non-excluded page, never capped
+
+Pages are listed newest-first (the same order used by RSS/JSON Feed). Each
+entry is `- [Title](<base_url><url>): excerpt`, with the excerpt truncated to
+160 characters and the `: excerpt` portion omitted when the page has none.
+Pages with empty URL/title or matching an `llms_txt_exclude` glob are dropped.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `modules.llms_txt_description` | string | `""` | Site summary emitted as the `>` line; falls back to `site.description` |
+| `modules.llms_txt_max_pages` | int | `0` | Max pages in `llms.txt` (0 = no cap); `llms-full.txt` is always complete |
+| `modules.llms_txt_exclude` | string[] | `[]` | Glob patterns matched against page URLs (e.g. `["/tags/*"]`) |
+
+```toml
+[site]
+description = "A concise summary of what this site is about."
+
+[modules]
+llms_txt = true
+modules.llms_txt_description = "Override summary for LLM crawlers."  # optional
+modules.llms_txt_max_pages = 50        # optional; 0 = no cap
+modules.llms_txt_exclude = ["/tags/*", "/page/*"]
 ```
 
 ---

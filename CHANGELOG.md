@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-06-29
+
+### Added
+- `llms.txt` generator — `[modules] llms_txt` writes `/llms.txt` (compact catalog) and `/llms-full.txt` (complete catalog) following the [llms.txt](https://llmstxt.org) spec for LLM crawlers (ChatGPT, Perplexity, Google AI Overviews, Claude). Options: `modules.llms_txt_description` (summary `>` line, falls back to a new `site.description` field), `modules.llms_txt_max_pages` (caps only `llms.txt`; `llms-full.txt` is always complete), and `modules.llms_txt_exclude` (glob patterns matched against page URLs). Pages are listed newest-first as `- [Title](base_url+url): excerpt` with excerpts truncated to 160 chars. Default off preserves existing output.
+- Shared glob helper in `src/utils/glob.hpp` (`glob_match` + `matches_any_glob`), extracted from `sitemap.cpp` and now reused by both the sitemap and `llms.txt` modules.
+
 ## [0.4.0] - 2026-06-26
 
 ### Added

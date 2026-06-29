@@ -19,6 +19,7 @@ struct Config {
     std::string site_base_url;
     std::string site_language = "en";
     std::string site_twitter_handle;        // e.g. "@username"
+    std::string site_description;           // site summary; llms.txt fallback
     std::string env = "development";
 
     // [build]
@@ -93,6 +94,14 @@ struct Config {
 
     // [modules.json_feed] (used only when module_json_feed = true)
     std::string json_feed_output = "feed.json";  // filename under output_dir
+
+    // [modules.llms_txt] (used only when module_llms_txt = true)
+    // Emits llms.txt (compact, honors max_pages) and llms-full.txt (every
+    // non-excluded page) per the emerging llms.txt spec for LLM crawlers.
+    bool        module_llms_txt       = false;
+    std::string llms_txt_description;   // site summary; falls back to site_description
+    int         llms_txt_max_pages    = 0;   // 0 = no cap (only affects llms.txt)
+    std::vector<std::string> llms_txt_exclude;  // glob patterns matched against page URLs
 
     // [modules.robots]
     std::string robots_user_agent = "*";

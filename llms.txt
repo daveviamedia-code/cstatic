@@ -8,6 +8,7 @@ Key facts for agents:
 - `build --env production` deep-merges tables and replaces scalars/arrays from `config.production.toml` on top of the base config.
 - Incremental builds are content-hash cached in `.cstatic_cache/`; when smoke-testing, force `cstatic build --full` before concluding something is broken.
 - `{{ asset("path") }}` resolves fingerprinted filenames (returns the path unchanged when fingerprinting is off); `{{ seo_meta }}` is always safe to add.
+- **GEO / AI discovery modules** (opt-in under `[modules]`): `robots` + `robots_ai_crawlers_mode` (allow/disallow/custom list of known AI crawlers), and `llms_txt` (writes `/llms.txt` + `/llms-full.txt`; summary from `modules.llms_txt_description` → `site.description`; cap via `llms_txt_max_pages`, filter via `llms_txt_exclude` globs).
 
 ## Docs
 

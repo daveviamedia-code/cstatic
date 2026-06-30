@@ -17,6 +17,7 @@ set(LIB_SOURCES
     ${CMAKE_SOURCE_DIR}/src/content/frontmatter.cpp
     ${CMAKE_SOURCE_DIR}/src/content/link_graph.cpp
     ${CMAKE_SOURCE_DIR}/src/content/markdown.cpp
+    ${CMAKE_SOURCE_DIR}/src/content/schema_blocks.cpp
     ${CMAKE_SOURCE_DIR}/src/content/shortcodes.cpp
     ${CMAKE_SOURCE_DIR}/src/data/data_loader.cpp
     ${CMAKE_SOURCE_DIR}/src/hash/hash_store.cpp
@@ -57,6 +58,7 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/tests/test_robots.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_llms_txt.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_seo_schema.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_schema_blocks.cpp
 )
 
 add_executable(cstatic_tests ${TEST_SOURCES} ${LIB_SOURCES})

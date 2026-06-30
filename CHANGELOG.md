@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-06-30
+
+### Added
+- Schema blocks shortcode — `{% schema "Type" attrs %}...{% endschema %}` in markdown emits BOTH visible HTML and a JSON-LD schema object (appended to the page's `schema_extra`, so it is emitted verbatim by the G3 `seo_schema` module when `[seo] json_ld_enabled = true`). Supported types: **FAQPage** (`##? question` headings → `<section class="faq"><details><summary>…</summary>…</details>` plus a `FAQPage` schema with `Question`/`acceptedAnswer` pairs), **HowTo** (`##! step title` headings → `<ol class="howto"><li><h3>…</h3>…</li>` plus a `HowTo` schema with `HowToStep` entries), and **Review** (`item="…"`/`rating="N"` attrs + body → `<div class="review" data-rating="N">` plus a `Review` schema with `itemReviewed`/`reviewRating`/`reviewBody`). Answer/step/review markdown is rendered via the normal cmark-gfm pass, and plain-text variants feed the JSON-LD `text`/`reviewBody` fields. Unknown types produce a non-fatal `warn:` and pass the inner content through. The `##?` parser is exposed as the standalone `extract_faq_pairs()` helper for reuse by future FAQ extraction (G5). Pure syntax — no config flag; opt-in by writing a block. Pairs with G3 for AI Overview / Perplexity / ChatGPT citation of Q&A and how-to content.
+- New content module `src/content/schema_blocks.{hpp,cpp}` with the `SchemaBlockProcessor` class and `extract_faq_pairs`/`FaqPair` helpers.
+
 ## [0.6.0] - 2026-06-30
 
 ### Added

@@ -4,6 +4,7 @@
 #include "content/frontmatter.hpp"
 #include "content/link_graph.hpp"
 #include "content/markdown.hpp"
+#include "content/schema_blocks.hpp"
 #include "content/shortcodes.hpp"
 #include "data/data_loader.hpp"
 #include "hash/hash_store.hpp"
@@ -506,6 +507,10 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
     // missing (see ShortcodeProcessor::available()).
     ShortcodeProcessor shortcode_processor(cfg.shortcodes_dir);
 
+    // Schema-block processor ({% schema "Type" %}...{% endschema %}) — pure
+    // parsing, no state. A no-op pass-through on bodies with no schema blocks.
+    SchemaBlockProcessor schema_block_processor;
+
     // Wikilink resolver — built across Phase 1a (indexing) and read-only in
     // Phase 2 (backlinks). Single-threaded population; multi-threaded reads.
     LinkGraph link_graph;
@@ -680,18 +685,41 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
     for (auto& rp : raw_pages) {
         const std::string& title = rp.parsed.frontmatter.title;
 
+        // Build a lightweight page context once — shared by the shortcode and
+        // schema-block processors below.
+        std::string body = rp.parsed.body;
+        nlohmann::json page_ctx;
+        page_ctx["title"] = title;
+        page_ctx["url"]   = rp.url;
+        page_ctx["slug"]  = fs::path(rp.source_path).stem().string();
+        if (!rp.parsed.frontmatter.date.empty())
+            page_ctx["date"] = rp.parsed.frontmatter.date;
+
         // Expand shortcodes ({{< name params >}} / {{< name >}}...{{< /name >}})
         // before cmark-gfm. CMARK_OPT_UNSAFE lets the emitted raw HTML pass
         // through to the final document.
-        std::string body = rp.parsed.body;
         if (shortcode_processor.available()) {
-            nlohmann::json page_ctx;
-            page_ctx["title"] = title;
-            page_ctx["url"]   = rp.url;
-            page_ctx["slug"]  = fs::path(rp.source_path).stem().string();
-            if (!rp.parsed.frontmatter.date.empty())
-                page_ctx["date"] = rp.parsed.frontmatter.date;
             body = shortcode_processor.process(body, page_ctx);
+        }
+
+        // Schema blocks ({% schema "Type" attrs %}...{% endschema %}): emit
+        // visible HTML into the body and collect JSON-LD objects. Runs after
+        // shortcodes (so a shortcode may produce a schema block) and before
+        // wikilinks / render_markdown so the emitted raw HTML survives. The
+        // collected schemas are appended to frontmatter.schema_extra, which
+        // seo_schema::build_json_ld (G3) emits verbatim.
+        {
+            std::vector<nlohmann::json> page_schemas;
+            body = schema_block_processor.process(body, page_schemas, page_ctx);
+            if (!page_schemas.empty()) {
+                auto& custom = rp.parsed.frontmatter.custom;
+                if (!custom.contains("schema_extra") || !custom["schema_extra"].is_array()) {
+                    custom["schema_extra"] = nlohmann::json::array();
+                }
+                for (auto& s : page_schemas) {
+                    custom["schema_extra"].push_back(std::move(s));
+                }
+            }
         }
 
         // Rewrite [[wikilinks]] -> <a href>. Done AFTER shortcodes so a

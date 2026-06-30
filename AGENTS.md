@@ -176,6 +176,8 @@ exclude = ["/404.html"]    # URL paths to drop from sitemap
 
 In every layout's `<head>`, add `{{ seo_meta }}` — it emits description, Open Graph, Twitter Card, and canonical tags; missing variables render empty, so it is always safe. When `seo.json_ld_enabled = true`, `{{ seo_meta }}` **also** appends Schema.org JSON-LD `<script>` blocks: a site-wide WebSite (+ Organization when `org_name` is set), a page-level schema whose `@type` auto-resolves from `page.type` / URL (`BlogPosting` for `/posts/...`, else `WebPage`; `Product`/`SoftwareApplication` mapped from commerce fields), a `BreadcrumbList` for nested URLs, and each `page.schema_extra` entry verbatim. An explicit `page.schema` object deep-merges over the auto-generated one. This is the keystone GEO feature — Google AI Overviews, ChatGPT, and Perplexity weight JSON-LD heavily when citing.
 
+**Schema blocks** author `schema_extra` from markdown. `{% schema "FAQPage" %}...{% endschema %}` (with `##? question` headings), `{% schema "HowTo" %}` (with `##! step` headings), and `{% schema "Review" item="…" rating="N" %}` each emit visible HTML **and** a matching JSON-LD object that flows into `schema_extra`. No config flag; runs after shortcodes, before wikilinks/cmark. Unknown types `warn:` and pass content through. See `docs/config.md` → Schema Blocks.
+
 ### 5.7 Add data-driven pages
 
 ```toml
@@ -258,7 +260,7 @@ Full reference: `docs/config.md`. Most-used keys:
 | `type` | — | Schema.org `@type` override (e.g. `"Product"`, `"Article"`). Read by JSON-LD when `seo.json_ld_enabled = true`. |
 | `author` | — | String name; articles emit it as `{@type:Person, name}`. |
 | `schema` | — | Object deep-merged over the auto-generated JSON-LD schema. Use `schema["@type"]` to override the type. |
-| `schema_extra` | — | Array (or object) emitted verbatim as extra JSON-LD `<script>` blocks. |
+| `schema_extra` | — | Array (or object) emitted verbatim as extra JSON-LD `<script>` blocks. Auto-populated by `{% schema %}` blocks (FAQPage/HowTo/Review). |
 | `keywords` | — | Array or comma string; articles fall back to comma-joined `tags`. |
 
 Any extra field becomes `page.<field_name>` in templates. Commerce fields (`brand`, `price`, `currency`, `availability`, `rating`, `reviewCount`) and app fields (`application_category`/`category`, `operating_system`) are read by the `Product`/`SoftwareApplication` JSON-LD builders.

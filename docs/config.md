@@ -334,6 +334,50 @@ This is **important** text rendered inside the shortcode.
 
 The render context exposes `params` (positional array), `named` (object), `content` (block inner HTML), and `page` (current page's `title`, `url`, `slug`, `date`). An unknown shortcode prints a notice on stderr and expands to nothing. Shortcodes are disabled automatically when the directory is empty or missing.
 
+### Schema Blocks
+
+Schema blocks emit **both** visible HTML and a JSON-LD schema object from one markdown construct. They use `{% schema "Type" attrs %}...{% endschema %}` tags (distinct from `{{< >}}` shortcodes) and run after shortcodes, before `[[wikilinks]]` and the cmark-gfm render — so the emitted raw HTML survives into the final document (`CMARK_OPT_UNSAFE`). Each extracted schema is appended to the page's `schema_extra` and is emitted verbatim as an additional `<script type="application/ld+json">` block by the SEO module when `[seo] json_ld_enabled = true` (see [JSON-LD Options](#json-ld-options)). No config flag — opt in by writing a block; a body without schema blocks is a no-op pass-through.
+
+**FAQPage** — `##? question` headings start each Q/A; the paragraphs that follow are the answer (rendered as HTML in a `<details><summary>`; plain text feeds the JSON-LD `acceptedAnswer.text`):
+
+```markdown
+{% schema "FAQPage" %}
+##? What is C-Static?
+A fast C++ static site generator.
+
+##? Is it free?
+Yes, MIT licensed.
+{% endschema %}
+```
+
+Visible: `<section class="faq"><details><summary>…</summary>…</details>…</section>`. Style via the `.faq` CSS class.
+
+**HowTo** — `##! step title` headings start each step; following content is the step text:
+
+```markdown
+{% schema "HowTo" %}
+##! Install it
+Run `make`.
+
+##! Run it
+Type `./cstatic`.
+{% endschema %}
+```
+
+Visible: `<ol class="howto"><li><h3>…</h3>…</li>…</ol>`.
+
+**Review** — `item="…"` and `rating="N"` attributes on the opener; the block body is the review text:
+
+```markdown
+{% schema "Review" item="Widget" rating="5" %}
+This widget is great.
+{% endschema %}
+```
+
+Visible: `<div class="review" data-rating="5">…</div>`. `rating` is optional (omits `data-rating` and `reviewRating`).
+
+Unknown types print a non-fatal `warn:` on stderr and pass the inner content through without emitting a schema. A `FAQPage`/`HowTo` block with no `##?`/`##!` markers behaves the same way. Blocks do not nest.
+
 ### Wikilinks & Backlinks
 
 Wikilinks provide a slug-or-title shorthand for cross-referencing pages, and the build automatically exposes the reverse relationship (`page.backlinks`) to templates. Enable with:

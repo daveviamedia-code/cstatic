@@ -550,6 +550,69 @@ modules.llms_txt_max_pages = 50        # optional; 0 = no cap
 modules.llms_txt_exclude = ["/tags/*", "/page/*"]
 ```
 
+### JSON-LD Options
+
+When `seo.json_ld_enabled = true`, C-Static emits Schema.org
+[JSON-LD](https://schema.org) `<script type="application/ld+json">` blocks
+into `{{ seo_meta }}` on every page. This is the single biggest lever for
+Generative Engine Optimization (GEO) — Google AI Overviews, ChatGPT,
+Perplexity, and Bing Copilot all weight structured data heavily when citing
+sources.
+
+Each page receives, in order:
+
+1. A site-wide **WebSite** schema (always).
+2. A site-wide **Organization** schema when `seo.org_name` is set.
+3. A page-level schema whose `@type` is auto-selected (see below).
+4. A **BreadcrumbList** for nested pages (URLs deeper than `/`).
+5. One verbatim block per `schema_extra` frontmatter entry.
+
+**Type resolution** (first match wins): `page.schema["@type"]` → `page.type`
+frontmatter → `BlogPosting` if the URL starts with `/posts/` → `WebPage`.
+Supported `@type`s: `WebPage`, `BlogPosting`, `Article`, `NewsArticle`,
+`TechArticle`, `Product`, `SoftwareApplication`. Any other value is emitted
+as-is with `WebPage`-style field mapping.
+
+An explicit `page.schema` object is **deep-merged** over the auto-generated
+schema, so you override individual fields without losing the auto-filled
+`headline`, `datePublished`, `author`, `image`, etc. Missing required fields
+are surfaced as non-fatal `warn:` lines on stderr.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `seo.json_ld_enabled` | bool | `false` | Emit JSON-LD structured-data blocks (opt-in; off preserves existing output) |
+| `seo.org_name` | string | `""` | Organization name; setting it enables the site-wide Organization schema |
+| `seo.org_legal_name` | string | `""` | Legal name (emitted as `legalName`) |
+| `seo.org_logo` | string | `""` | Logo URL (relative `/`-paths prefixed with `base_url`) |
+| `seo.org_founding_date` | string | `""` | `foundingDate` (e.g. `"2015-01-01"`) |
+| `seo.org_founders` | string[] | `[]` | Each becomes `{@type:Person, name}` under `founder` |
+| `seo.org_same_as` | string[] | `[]` | `sameAs` array of profile URLs |
+| `seo.org_url` | string | `site.base_url` | Organization URL (defaults to site base URL) |
+| `seo.website_search_url_template` | string | `""` | When set, adds a WebSite `potentialAction` SearchAction; use `{search_term_string}` as the placeholder |
+
+```toml
+[seo]
+json_ld_enabled = true
+org_name = "Acme Inc"
+org_logo = "/logo.png"
+org_founding_date = "2015-01-01"
+org_founders = ["Alice", "Bob"]
+org_same_as = ["https://twitter.com/acme", "https://github.com/acme"]
+website_search_url_template = "/search?q={search_term_string}"
+```
+
+**Per-page frontmatter** (lives in `custom`, available as `page.*` in templates):
+
+| Field | Used by | Description |
+|-------|---------|-------------|
+| `type` | all | Schema `@type` override (e.g. `"Product"`, `"SoftwareApplication"`). |
+| `author` | articles | String name → emitted as `{@type:Person, name}`. |
+| `schema` | all | Object deep-merged over the auto-generated schema. Use `schema["@type"]` to override the type itself. |
+| `schema_extra` | all | Array (or single object) emitted verbatim as additional `<script>` blocks. |
+| `keywords` | all | Array or comma string; falls back to comma-joined `tags` for articles. |
+| `brand`, `price`, `currency`, `availability`, `rating`, `reviewCount` | Product / SoftwareApplication | Commerce fields → `brand`, `offers`, `aggregateRating`. |
+| `application_category` (or `category`), `operating_system` | SoftwareApplication | Mapped to `applicationCategory` / `operatingSystem`. |
+
 ---
 
 ## `[sitemap]` — Sitemap Options
@@ -846,6 +909,7 @@ When you include `{{ seo_meta }}` in a template (typically inside `<head>`), C-S
 - `<meta name="twitter:card">` (`summary_large_image` if image present, else `summary`)
 - `<meta name="twitter:site">` (if `site.twitter_handle` is set)
 - `<link rel="canonical">`
+- `<script type="application/ld+json">` Schema.org blocks (only when `seo.json_ld_enabled = true` — see [JSON-LD Options](#json-ld-options))
 
 All attribute values are XML-escaped. Inja renders missing variables as empty strings, so adding `{{ seo_meta }}` to existing templates is always safe.
 

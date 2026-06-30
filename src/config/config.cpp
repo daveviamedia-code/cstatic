@@ -294,6 +294,17 @@ Config load_config(const std::string& path, const std::string& env) {
         }
     }
 
+    // --- [seo.json_ld] + [seo.organization] + [seo.website] ---
+    cfg.json_ld_enabled = optional_bool(tbl, "seo.json_ld_enabled", cfg.json_ld_enabled);
+    cfg.org_name          = optional_string(tbl, "seo.org_name", "");
+    cfg.org_legal_name    = optional_string(tbl, "seo.org_legal_name", "");
+    cfg.org_logo          = optional_string(tbl, "seo.org_logo", "");
+    cfg.org_founding_date = optional_string(tbl, "seo.org_founding_date", "");
+    cfg.org_founders      = optional_string_array(tbl, "seo.org_founders");
+    cfg.org_same_as       = optional_string_array(tbl, "seo.org_same_as");
+    cfg.org_url           = optional_string(tbl, "seo.org_url", cfg.site_base_url);
+    cfg.website_search_url_template = optional_string(tbl, "seo.website_search_url_template", "");
+
     // --- [sitemap] ---
     cfg.sitemap_exclude = optional_string_array(tbl, "sitemap.exclude");
 
@@ -438,6 +449,16 @@ std::string config_to_json(const Config& cfg) {
     j["modules"]["robots_disallow"]         = cfg.robots_disallow;
     j["modules"]["robots_ai_crawlers_mode"]   = cfg.robots_ai_crawlers_mode;
     j["modules"]["robots_ai_crawlers_custom"] = cfg.robots_ai_crawlers_custom;
+
+    j["seo"]["json_ld_enabled"]               = cfg.json_ld_enabled;
+    j["seo"]["org_name"]                      = cfg.org_name;
+    j["seo"]["org_legal_name"]                = cfg.org_legal_name;
+    j["seo"]["org_logo"]                      = cfg.org_logo;
+    j["seo"]["org_founding_date"]             = cfg.org_founding_date;
+    j["seo"]["org_founders"]                  = cfg.org_founders;
+    j["seo"]["org_same_as"]                   = cfg.org_same_as;
+    j["seo"]["org_url"]                       = cfg.org_url;
+    j["seo"]["website_search_url_template"]   = cfg.website_search_url_template;
 
     j["sitemap"]["exclude"] = cfg.sitemap_exclude;
 

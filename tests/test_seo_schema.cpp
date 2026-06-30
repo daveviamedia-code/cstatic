@@ -1,0 +1,355 @@
+#include <catch2/catch_test_macros.hpp>
+
+#include <nlohmann/json.hpp>
+
+#include <string>
+#include <vector>
+
+#include "config/config.hpp"
+#include "modules/seo_schema.hpp"
+
+using cstatic::Config;
+using cstatic::modules::seo_schema::build_json_ld;
+using cstatic::modules::seo_schema::build_organization_script;
+using cstatic::modules::seo_schema::build_website_script;
+using cstatic::modules::seo_schema::validate;
+
+namespace {
+
+static bool contains(const std::string& h, const std::string& n) {
+    return h.find(n) != std::string::npos;
+}
+
+static Config base_config() {
+    Config cfg;
+    cfg.site_title = "My Site";
+    cfg.site_base_url = "https://example.com";
+    cfg.json_ld_enabled = true;
+    return cfg;
+}
+
+static nlohmann::json make_page(const std::string& title, const std::string& url,
+                                const std::string& date) {
+    nlohmann::json p;
+    p["title"] = title;
+    p["url"] = url;
+    p["date"] = date;
+    return p;
+}
+
+// Return the JSON content of the Nth (0-indexed) JSON-LD <script> block.
+// Null on out-of-range or parse failure.
+static nlohmann::json extract_script(const std::string& html, size_t index) {
+    const std::string open = "<script type=\"application/ld+json\">\n";
+    const std::string close = "\n</script>\n";
+    size_t pos = 0;
+    for (size_t i = 0; i <= index; ++i) {
+        size_t start = html.find(open, pos);
+        if (start == std::string::npos) return nullptr;
+        size_t json_start = start + open.size();
+        size_t end = html.find(close, json_start);
+        if (end == std::string::npos) return nullptr;
+        if (i == index) {
+            return nlohmann::json::parse(html.substr(json_start, end - json_start));
+        }
+        pos = end + close.size();
+    }
+    return nullptr;
+}
+
+static int count_scripts(const std::string& html) {
+    const std::string open = "<script type=\"application/ld+json\">\n";
+    int n = 0;
+    size_t pos = 0;
+    while ((pos = html.find(open, pos)) != std::string::npos) {
+        ++n;
+        pos += open.size();
+    }
+    return n;
+}
+
+} // anonymous namespace
+
+TEST_CASE("seo_schema: disabled returns empty", "[seo_schema]") {
+    Config cfg = base_config();
+    cfg.json_ld_enabled = false;
+    auto page = make_page("P", "/p/", "2025-01-01");
+    REQUIRE(build_json_ld(cfg, page, nlohmann::json::array()).empty());
+}
+
+TEST_CASE("seo_schema: WebSite schema always emitted with site title", "[seo_schema]") {
+    Config cfg = base_config();
+    auto page = make_page("Hello", "/hello/", "2025-01-01");
+    std::string out = build_json_ld(cfg, page, nlohmann::json::array());
+    nlohmann::json ws = extract_script(out, 0);
+    REQUIRE(ws["@type"] == "WebSite");
+    REQUIRE(ws["name"] == "My Site");
+    REQUIRE(ws["url"] == "https://example.com");
+    // Standalone helper agrees.
+    REQUIRE(contains(build_website_script(cfg), "\"WebSite\""));
+}
+
+TEST_CASE("seo_schema: Organization toggles on org_name", "[seo_schema]") {
+    // Absent when org_name empty — script 1 is the page schema (WebPage).
+    {
+        Config cfg = base_config();
+        auto page = make_page("P", "/p/", "2025-01-01");
+        std::string out = build_json_ld(cfg, page, nlohmann::json::array());
+        nlohmann::json s1 = extract_script(out, 1);
+        REQUIRE(s1["@type"] == "WebPage");
+        REQUIRE(build_organization_script(cfg).empty());
+    }
+    // Present with every field populated.
+    {
+        Config cfg = base_config();
+        cfg.org_name = "Acme Inc";
+        cfg.org_legal_name = "Acme Incorporated";
+        cfg.org_logo = "/logo.png";
+        cfg.org_founding_date = "2001-02-03";
+        cfg.org_founders = {"Alice", "Bob"};
+        cfg.org_same_as = {"https://twitter.com/acme"};
+        cfg.org_url = "https://acme.example.com";
+        auto page = make_page("P", "/p/", "2025-01-01");
+        std::string out = build_json_ld(cfg, page, nlohmann::json::array());
+        nlohmann::json org = extract_script(out, 1);  // after WebSite
+        REQUIRE(org["@type"] == "Organization");
+        REQUIRE(org["name"] == "Acme Inc");
+        REQUIRE(org["legalName"] == "Acme Incorporated");
+        REQUIRE(org["logo"] == "https://example.com/logo.png");
+        REQUIRE(org["foundingDate"] == "2001-02-03");
+        REQUIRE(org["url"] == "https://acme.example.com");
+        REQUIRE(org["founder"].size() == 2);
+        REQUIRE(org["founder"][0]["@type"] == "Person");
+        REQUIRE(org["founder"][0]["name"] == "Alice");
+        REQUIRE(org["sameAs"][0] == "https://twitter.com/acme");
+    }
+}
+
+TEST_CASE("seo_schema: WebSite SearchAction when template set", "[seo_schema]") {
+    Config cfg = base_config();
+    cfg.website_search_url_template = "/search?q={search_term_string}";
+    auto page = make_page("P", "/p/", "2025-01-01");
+    std::string out = build_json_ld(cfg, page, nlohmann::json::array());
+    nlohmann::json ws = extract_script(out, 0);
+    REQUIRE(ws["potentialAction"]["@type"] == "SearchAction");
+    REQUIRE(ws["potentialAction"]["target"] ==
+            "https://example.com/search?q={search_term_string}");
+    REQUIRE(ws["potentialAction"]["query-input"] ==
+            "required name=search_term_string");
+}
+
+TEST_CASE("seo_schema: default WebPage for root-level page", "[seo_schema]") {
+    Config cfg = base_config();
+    auto page = make_page("Home", "/", "2025-01-01");
+    std::string out = build_json_ld(cfg, page, nlohmann::json::array());
+    nlohmann::json p = extract_script(out, 1);
+    REQUIRE(p["@type"] == "WebPage");
+    REQUIRE(p["name"] == "Home");
+    REQUIRE(p["url"] == "https://example.com/");
+    // Root page gets no breadcrumb.
+    REQUIRE(count_scripts(out) == 2);
+}
+
+TEST_CASE("seo_schema: BlogPosting auto-default for /posts/ URL", "[seo_schema]") {
+    Config cfg = base_config();
+    auto page = make_page("Post", "/posts/hello/", "2025-01-01");
+    std::string out = build_json_ld(cfg, page, nlohmann::json::array());
+    nlohmann::json p = extract_script(out, 1);
+    REQUIRE(p["@type"] == "BlogPosting");
+}
+
+TEST_CASE("seo_schema: explicit type overrides URL heuristic", "[seo_schema]") {
+    Config cfg = base_config();
+    auto page = make_page("P", "/posts/hello/", "2025-01-01");
+    page["type"] = "Article";
+    std::string out = build_json_ld(cfg, page, nlohmann::json::array());
+    nlohmann::json p = extract_script(out, 1);
+    REQUIRE(p["@type"] == "Article");
+}
+
+TEST_CASE("seo_schema: explicit schema.@type wins over page.type", "[seo_schema]") {
+    Config cfg = base_config();
+    auto page = make_page("P", "/posts/hello/", "2025-01-01");
+    page["type"] = "Article";
+    page["schema"] = nlohmann::json{{"@type", "Product"}};
+    std::string out = build_json_ld(cfg, page, nlohmann::json::array());
+    nlohmann::json p = extract_script(out, 1);
+    REQUIRE(p["@type"] == "Product");
+}
+
+TEST_CASE("seo_schema: BlogPosting maps headline/author/publisher/keywords",
+          "[seo_schema]") {
+    Config cfg = base_config();
+    auto page = make_page("Hello World", "/posts/hello/", "2025-01-02");
+    page["author"] = "Jane Doe";
+    page["tags"] = {"foo", "bar"};
+    std::string out = build_json_ld(cfg, page, nlohmann::json::array());
+    nlohmann::json p = extract_script(out, 1);
+    REQUIRE(p["headline"] == "Hello World");
+    REQUIRE(p["datePublished"] == "2025-01-02");
+    REQUIRE(p["dateModified"] == "2025-01-02");
+    REQUIRE(p["author"]["@type"] == "Person");
+    REQUIRE(p["author"]["name"] == "Jane Doe");
+    REQUIRE(p["publisher"]["@type"] == "Organization");
+    REQUIRE(p["publisher"]["name"] == "My Site");  // falls back to site_title
+    REQUIRE(p["keywords"] == "foo, bar");          // comma-joined tags
+    REQUIRE(p["mainEntityOfPage"]["@id"] ==
+            "https://example.com/posts/hello/");
+}
+
+TEST_CASE("seo_schema: publisher uses Organization when org_name set",
+          "[seo_schema]") {
+    Config cfg = base_config();
+    cfg.org_name = "Acme";
+    cfg.org_logo = "/logo.png";
+    auto page = make_page("Hello", "/posts/hello/", "2025-01-02");
+    page["author"] = "Jane";
+    std::string out = build_json_ld(cfg, page, nlohmann::json::array());
+    // Script 0 = WebSite, 1 = Organization, 2 = BlogPosting.
+    nlohmann::json p = extract_script(out, 2);
+    REQUIRE(p["publisher"]["name"] == "Acme");
+    REQUIRE(p["publisher"]["logo"] == "https://example.com/logo.png");
+}
+
+TEST_CASE("seo_schema: schema override deep-merges", "[seo_schema]") {
+    Config cfg = base_config();
+    auto page = make_page("Hello", "/posts/hello/", "2025-01-02");
+    page["schema"] = nlohmann::json{{"description", "Custom description"}};
+    std::string out = build_json_ld(cfg, page, nlohmann::json::array());
+    nlohmann::json p = extract_script(out, 1);
+    REQUIRE(p["@type"] == "BlogPosting");
+    REQUIRE(p["headline"] == "Hello");               // auto field preserved
+    REQUIRE(p["description"] == "Custom description");  // override wins
+}
+
+TEST_CASE("seo_schema: schema_extra emits verbatim blocks", "[seo_schema]") {
+    Config cfg = base_config();
+    auto page = make_page("P", "/", "2025-01-01");  // root → no breadcrumb
+    page["schema_extra"] = nlohmann::json::array({
+        nlohmann::json{{"@type", "FAQPage"}, {"name", "Q1"}},
+        nlohmann::json{{"@type", "Event"}, {"name", "E1"}},
+    });
+    std::string out = build_json_ld(cfg, page, nlohmann::json::array());
+    // WebSite + page schema + 2 extras = 4
+    REQUIRE(count_scripts(out) == 4);
+    nlohmann::json e0 = extract_script(out, 2);
+    nlohmann::json e1 = extract_script(out, 3);
+    REQUIRE(e0["@type"] == "FAQPage");
+    REQUIRE(e0["name"] == "Q1");
+    REQUIRE(e1["@type"] == "Event");
+    REQUIRE(e1["name"] == "E1");
+}
+
+TEST_CASE("seo_schema: BreadcrumbList for nested page includes current as last",
+          "[seo_schema]") {
+    Config cfg = base_config();
+    auto page = make_page("Hello", "/posts/hello/", "2025-01-01");
+    nlohmann::json pages = nlohmann::json::array({
+        make_page("Home", "/", "2025-01-01"),
+        make_page("Posts", "/posts/", "2025-01-01"),
+        page,
+    });
+    std::string out = build_json_ld(cfg, page, pages);
+    // WebSite + WebPage(page) + Breadcrumb = 3
+    REQUIRE(count_scripts(out) == 3);
+    nlohmann::json bl = extract_script(out, 2);
+    REQUIRE(bl["@type"] == "BreadcrumbList");
+    auto items = bl["itemListElement"];
+    REQUIRE(items.size() == 3);
+    REQUIRE(items[0]["position"] == 1);
+    REQUIRE(items[0]["name"] == "My Site");    // root → site title
+    REQUIRE(items[0]["item"] == "https://example.com/");
+    REQUIRE(items[1]["name"] == "Posts");      // resolved via pages_array
+    REQUIRE(items[2]["position"] == 3);
+    REQUIRE(items[2]["name"] == "Hello");      // current page last
+    REQUIRE(items[2]["item"] == "https://example.com/posts/hello/");
+}
+
+TEST_CASE("seo_schema: Product maps price/currency to Offer", "[seo_schema]") {
+    Config cfg = base_config();
+    auto page = make_page("Widget", "/products/widget/", "2025-01-01");
+    page["type"] = "Product";
+    page["brand"] = "Acme";
+    page["price"] = 19.99;
+    page["currency"] = "USD";
+    page["availability"] = "https://schema.org/InStock";
+    std::string out = build_json_ld(cfg, page, nlohmann::json::array());
+    nlohmann::json p = extract_script(out, 1);
+    REQUIRE(p["@type"] == "Product");
+    REQUIRE(p["name"] == "Widget");
+    REQUIRE(p["brand"]["@type"] == "Brand");
+    REQUIRE(p["brand"]["name"] == "Acme");
+    REQUIRE(p["offers"]["@type"] == "Offer");
+    REQUIRE(p["offers"]["price"] == 19.99);
+    REQUIRE(p["offers"]["priceCurrency"] == "USD");
+    REQUIRE(p["offers"]["availability"] == "https://schema.org/InStock");
+}
+
+TEST_CASE("seo_schema: SoftwareApplication maps category/os", "[seo_schema]") {
+    Config cfg = base_config();
+    auto page = make_page("MyApp", "/apps/myapp/", "2025-01-01");
+    page["type"] = "SoftwareApplication";
+    page["application_category"] = "DeveloperApplication";
+    page["operating_system"] = "macOS";
+    std::string out = build_json_ld(cfg, page, nlohmann::json::array());
+    nlohmann::json p = extract_script(out, 1);
+    REQUIRE(p["@type"] == "SoftwareApplication");
+    REQUIRE(p["applicationCategory"] == "DeveloperApplication");
+    REQUIRE(p["operatingSystem"] == "macOS");
+}
+
+TEST_CASE("seo_schema: image resolved against base_url; canonical used when set",
+          "[seo_schema]") {
+    Config cfg = base_config();
+    auto page = make_page("Hello", "/posts/hello/", "2025-01-01");
+    page["image"] = "/img/cover.png";
+    page["canonical"] = "https://canonical.example/elsewhere";
+    std::string out = build_json_ld(cfg, page, nlohmann::json::array());
+    nlohmann::json p = extract_script(out, 1);
+    REQUIRE(p["image"] == "https://example.com/img/cover.png");
+    REQUIRE(p["mainEntityOfPage"]["@id"] == "https://canonical.example/elsewhere");
+    // Script tags are well-formed.
+    REQUIRE(contains(out, "<script type=\"application/ld+json\">"));
+    REQUIRE(contains(out, "</script>"));
+}
+
+TEST_CASE("seo_schema: validate flags missing BlogPosting fields", "[seo_schema]") {
+    nlohmann::json s;
+    s["@type"] = "BlogPosting";
+    auto issues = validate(s, "/posts/x/");
+    REQUIRE(issues.size() == 3);
+    // Partial — only datePublished missing.
+    nlohmann::json s2;
+    s2["@type"] = "BlogPosting";
+    s2["headline"] = "Hi";
+    s2["author"] = nlohmann::json{{"@type", "Person"}, {"name", "X"}};
+    auto issues2 = validate(s2, "/posts/x/");
+    REQUIRE(issues2.size() == 1);
+    REQUIRE(issues2[0].field == "datePublished");
+}
+
+TEST_CASE("seo_schema: validate passes for complete WebPage", "[seo_schema]") {
+    nlohmann::json s;
+    s["@type"] = "WebPage";
+    s["name"] = "Home";
+    REQUIRE(validate(s, "/").empty());
+}
+
+TEST_CASE("seo_schema: validate Product requires offers.price", "[seo_schema]") {
+    nlohmann::json s;
+    s["@type"] = "Product";
+    s["name"] = "Widget";
+    auto issues = validate(s, "/p/");
+    REQUIRE(issues.size() == 1);
+    REQUIRE(issues[0].field == "offers.price");
+}
+
+TEST_CASE("seo_schema: validate SoftwareApplication requires applicationCategory",
+          "[seo_schema]") {
+    nlohmann::json s;
+    s["@type"] = "SoftwareApplication";
+    s["name"] = "App";
+    auto issues = validate(s, "/a/");
+    REQUIRE(issues.size() == 1);
+    REQUIRE(issues[0].field == "applicationCategory");
+}

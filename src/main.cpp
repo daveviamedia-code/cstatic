@@ -211,6 +211,7 @@ robots = false
 # To welcome AI/LLM crawlers (ChatGPT, Perplexity, Google AI Overviews), set:
 # robots_ai_crawlers_mode = "allow"   # or "disallow" / "custom"
 # llms_txt = false  # emit /llms.txt + /llms-full.txt for LLM crawlers
+# json_ld_enabled = false  # emit Schema.org JSON-LD structured data
 
 [[collection]]
 name = "posts"

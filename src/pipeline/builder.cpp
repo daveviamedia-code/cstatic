@@ -12,6 +12,7 @@
 #include "modules/json_feed.hpp"
 #include "modules/llms_txt.hpp"
 #include "modules/robots.hpp"
+#include "modules/seo_schema.hpp"
 #include "modules/search.hpp"
 #include "modules/og_images.hpp"
 #include "template/renderer.hpp"
@@ -262,6 +263,7 @@ static void build_paginated_pages(
 }
 
 static void build_per_item_pages(
+    const Config& cfg,
     const Config::DataSource& ds,
     const nlohmann::json& items,
     const nlohmann::json& site_ctx,
@@ -317,6 +319,12 @@ static void build_per_item_pages(
             item.value("canonical", ""),
             site_ctx.value("base_url", ""),
             site_ctx.value("twitter_handle", ""));
+        if (cfg.json_ld_enabled) {
+            nlohmann::json schema_page = item;
+            schema_page["url"] = item_url;
+            ctx["seo_meta"] = ctx["seo_meta"].get<std::string>()
+                + modules::seo_schema::build_json_ld(cfg, schema_page, pages_array);
+        }
 
         std::string html;
         try {
@@ -1210,12 +1218,29 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
                 auto it = og_image_map.find(rp.url);
                 if (it != og_image_map.end()) og_image_for_page = it->second;
             }
-            ctx["seo_meta"] = build_seo_meta(
+            std::string seo_meta = build_seo_meta(
                 rp.parsed.frontmatter.title, rp.url,
                 rp.parsed.frontmatter.description,
                 utils::truncate_text(utils::strip_html_tags(rp.html_content), 200),
                 og_image_for_page, rp.parsed.frontmatter.canonical,
                 cfg.site_base_url, cfg.site_twitter_handle);
+            if (cfg.json_ld_enabled) {
+                nlohmann::json schema_page;
+                schema_page["title"]       = rp.parsed.frontmatter.title;
+                schema_page["url"]         = rp.url;
+                schema_page["date"]        = rp.parsed.frontmatter.date;
+                schema_page["description"] = rp.parsed.frontmatter.description;
+                schema_page["image"]       = og_image_for_page;
+                schema_page["canonical"]   = rp.parsed.frontmatter.canonical;
+                schema_page["excerpt"]     = utils::truncate_text(
+                    utils::strip_html_tags(rp.html_content), 200);
+                schema_page["tags"]        = tags;
+                for (const auto& [k, v] : rp.parsed.frontmatter.custom.items()) {
+                    schema_page[k] = v;
+                }
+                seo_meta += modules::seo_schema::build_json_ld(cfg, schema_page, pages_array);
+            }
+            ctx["seo_meta"] = seo_meta;
 
             try {
                 rendered_html[ti] = renderer.render(rp.parsed.frontmatter.layout,
@@ -1347,7 +1372,7 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
                                       result.pages_built, &result.errors);
             }
             if (ds.per_item) {
-                build_per_item_pages(ds, items, site_ctx, pages_array,
+                build_per_item_pages(cfg, ds, items, site_ctx, pages_array,
                                      renderer, cfg.output_dir,
                                      data_file_path, tmpl_path,
                                      all_outputs, all_records,

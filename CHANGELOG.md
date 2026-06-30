@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-06-30
+
+### Added
+- Schema.org JSON-LD structured data — `[seo] json_ld_enabled = true` makes `{{ seo_meta }}` append `<script type="application/ld+json">` blocks: a site-wide **WebSite** schema (always), a site-wide **Organization** schema when `seo.org_name` is set (`org_legal_name`/`org_logo`/`org_founding_date`/`org_founders`/`org_same_as`/`org_url`), a page-level schema whose `@type` auto-resolves from `page.schema["@type"]` → `page.type` → `BlogPosting` (URLs under `/posts/`) → `WebPage`, a **BreadcrumbList** for nested pages, and each `page.schema_extra` entry emitted verbatim. An explicit `page.schema` object is deep-merged over the auto-generated schema. Supported page `@type`s: `WebPage`, `BlogPosting`, `Article`, `NewsArticle`, `TechArticle`, `Product` (maps `brand`/`price`/`currency`/`availability`/`rating`/`reviewCount` → `Brand`/`offers`/`aggregateRating`), `SoftwareApplication` (maps `application_category`/`operating_system`). `seo.website_search_url_template` adds a WebSite `potentialAction` SearchAction. Missing required fields surface as non-fatal `warn:` lines on stderr. Default off preserves existing output — the keystone GEO feature for Google AI Overviews, ChatGPT, Perplexity, and Bing Copilot citation.
+- New module `src/modules/seo_schema.{hpp,cpp}` (namespace `cstatic::modules::seo_schema`) with the `SchemaIssue` struct and `build_json_ld` / `build_website_script` / `build_organization_script` / `validate` API.
+
 ## [0.5.0] - 2026-06-29
 
 ### Added

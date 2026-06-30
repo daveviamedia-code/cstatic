@@ -117,6 +117,24 @@ struct Config {
     std::string robots_ai_crawlers_mode = "off";
     std::vector<std::string> robots_ai_crawlers_custom;
 
+    // [seo.json_ld] — emit Schema.org JSON-LD structured data <script> blocks
+    // (opt-in; off preserves existing output). When on, {{ seo_meta }} gains
+    // WebSite + Organization (if org_name set) + per-page + BreadcrumbList
+    // (nested pages) + schema_extra blocks.
+    bool json_ld_enabled = false;
+
+    // [seo.organization] — emitted site-wide when org_name is non-empty.
+    std::string org_name;
+    std::string org_legal_name;
+    std::string org_logo;
+    std::string org_founding_date;
+    std::vector<std::string> org_founders;
+    std::vector<std::string> org_same_as;
+    std::string org_url;  // defaults to site_base_url when empty
+
+    // [seo.website] — site-wide WebSite schema tuning.
+    std::string website_search_url_template;  // e.g. "/search?q={search_term_string}"
+
     // [sitemap]
     std::vector<std::string> sitemap_exclude;
 

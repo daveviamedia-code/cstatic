@@ -1,0 +1,533 @@
+#include "modules/seo_schema.hpp"
+#include "config/config.hpp"
+#include "utils/terminal.hpp"
+
+#include <nlohmann/json.hpp>
+#include <algorithm>
+#include <cctype>
+#include <iostream>
+#include <sstream>
+#include <string>
+
+namespace cstatic {
+namespace modules {
+namespace seo_schema {
+
+namespace {
+
+// Wrap a JSON object in a JSON-LD <script> block (pretty-printed, 2-space).
+std::string make_script(const nlohmann::json& j) {
+    return "<script type=\"application/ld+json\">\n" + j.dump(2) + "\n</script>\n";
+}
+
+// Join a base URL and a path into an absolute URL. Absolute URLs (with
+// scheme) are returned unchanged; paths starting with '/' replace the path
+// root of `base`; relative paths are appended after a '/' separator.
+std::string resolve_url(const std::string& base, const std::string& path) {
+    if (path.empty()) return "";
+    if (path.find("://") != std::string::npos) return path;  // already absolute
+    if (path.front() == '/') return base + path;
+    return base + "/" + path;
+}
+
+// True if the page lives under /posts/ (the default collection). Used to pick
+// BlogPosting as the default @type when no explicit type is set.
+bool is_post(const nlohmann::json& page) {
+    std::string url = page.value("url", "");
+    return url.rfind("/posts/", 0) == 0;
+}
+
+// Pick a comma-joined keywords string or array from the page: explicit
+// `keywords` wins; otherwise fall back to comma-joined `tags` when allowed.
+// Returns null when nothing suitable is present (caller omits the field).
+nlohmann::json resolve_keywords(const nlohmann::json& page, bool fallback_to_tags) {
+    if (page.contains("keywords") && !page["keywords"].is_null()) {
+        return page["keywords"];
+    }
+    if (fallback_to_tags && page.contains("tags") && page["tags"].is_array()
+        && !page["tags"].empty()) {
+        std::string joined;
+        for (const auto& t : page["tags"]) {
+            if (!t.is_string()) continue;
+            if (!joined.empty()) joined += ", ";
+            joined += t.get<std::string>();
+        }
+        return joined;
+    }
+    return nullptr;
+}
+
+// Recursively merge `overlay` into `base`: objects recurse, everything else
+// (scalars, arrays) replaces. Used so an explicit `page.schema` block can
+// override individual fields without blowing away the auto-generated ones.
+void deep_merge(nlohmann::json& base, const nlohmann::json& overlay) {
+    if (!base.is_object() || !overlay.is_object()) {
+        base = overlay;
+        return;
+    }
+    for (auto it = overlay.begin(); it != overlay.end(); ++it) {
+        if (base.contains(it.key()) && base[it.key()].is_object() && it.value().is_object()) {
+            deep_merge(base[it.key()], it.value());
+        } else {
+            base[it.key()] = it.value();
+        }
+    }
+}
+
+// --- Site-wide schemas ---
+
+nlohmann::json build_website_schema(const Config& cfg) {
+    nlohmann::json j;
+    j["@context"] = "https://schema.org";
+    j["@type"] = "WebSite";
+    j["name"] = cfg.site_title;
+    j["url"] = cfg.org_url.empty() ? cfg.site_base_url : cfg.org_url;
+    if (!cfg.website_search_url_template.empty()) {
+        nlohmann::json pa;
+        pa["@type"] = "SearchAction";
+        pa["target"] = resolve_url(cfg.site_base_url, cfg.website_search_url_template);
+        pa["query-input"] = "required name=search_term_string";
+        j["potentialAction"] = pa;
+    }
+    return j;
+}
+
+nlohmann::json build_organization_schema(const Config& cfg) {
+    nlohmann::json j;
+    j["@context"] = "https://schema.org";
+    j["@type"] = "Organization";
+    j["name"] = cfg.org_name;
+    j["url"] = cfg.org_url.empty() ? cfg.site_base_url : cfg.org_url;
+    if (!cfg.org_legal_name.empty()) j["legalName"] = cfg.org_legal_name;
+    if (!cfg.org_logo.empty()) j["logo"] = resolve_url(cfg.site_base_url, cfg.org_logo);
+    if (!cfg.org_founding_date.empty()) j["foundingDate"] = cfg.org_founding_date;
+    if (!cfg.org_founders.empty()) {
+        nlohmann::json founders = nlohmann::json::array();
+        for (const auto& f : cfg.org_founders) {
+            nlohmann::json p;
+            p["@type"] = "Person";
+            p["name"] = f;
+            founders.push_back(p);
+        }
+        j["founder"] = founders;
+    }
+    if (!cfg.org_same_as.empty()) {
+        nlohmann::json same_as = nlohmann::json::array();
+        for (const auto& s : cfg.org_same_as) same_as.push_back(s);
+        j["sameAs"] = same_as;
+    }
+    return j;
+}
+
+// --- Page-level schemas ---
+
+nlohmann::json build_webpage_schema(const Config& cfg, const nlohmann::json& page,
+                                    const std::string& type) {
+    nlohmann::json j;
+    j["@context"] = "https://schema.org";
+    j["@type"] = type;
+
+    std::string title = page.value("title", "");
+    if (!title.empty()) j["name"] = title;
+
+    std::string canonical = page.value("canonical", "");
+    std::string url = !canonical.empty() ? canonical
+                      : resolve_url(cfg.site_base_url, page.value("url", ""));
+    if (!url.empty()) j["url"] = url;
+
+    std::string desc = page.value("description", "");
+    if (desc.empty()) desc = page.value("excerpt", "");
+    if (!desc.empty()) j["description"] = desc;
+
+    std::string image = page.value("image", "");
+    if (!image.empty()) j["image"] = resolve_url(cfg.site_base_url, image);
+
+    nlohmann::json part_of;
+    part_of["@type"] = "WebSite";
+    part_of["name"] = cfg.site_title;
+    part_of["url"] = cfg.org_url.empty() ? cfg.site_base_url : cfg.org_url;
+    j["isPartOf"] = part_of;
+
+    std::string date = page.value("date", "");
+    if (!date.empty()) j["dateModified"] = date;
+
+    nlohmann::json kw = resolve_keywords(page, /*fallback_to_tags=*/false);
+    if (!kw.is_null()) j["keywords"] = kw;
+
+    return j;
+}
+
+nlohmann::json build_article_schema(const Config& cfg, const nlohmann::json& page,
+                                    const std::string& type) {
+    nlohmann::json j;
+    j["@context"] = "https://schema.org";
+    j["@type"] = type;
+
+    std::string title = page.value("title", "");
+    if (!title.empty()) j["headline"] = title;
+
+    std::string date = page.value("date", "");
+    if (!date.empty()) {
+        j["datePublished"] = date;
+        j["dateModified"] = date;
+    }
+
+    std::string author = page.value("author", "");
+    if (!author.empty()) {
+        nlohmann::json a;
+        a["@type"] = "Person";
+        a["name"] = author;
+        j["author"] = a;
+    }
+
+    std::string image = page.value("image", "");
+    if (!image.empty()) j["image"] = resolve_url(cfg.site_base_url, image);
+
+    // Publisher: full Organization when org_name is set, else a minimal one
+    // using the site title (articles require a publisher per Schema.org).
+    nlohmann::json pub;
+    pub["@type"] = "Organization";
+    if (!cfg.org_name.empty()) {
+        pub["name"] = cfg.org_name;
+        if (!cfg.org_logo.empty()) {
+            pub["logo"] = resolve_url(cfg.site_base_url, cfg.org_logo);
+        }
+    } else {
+        pub["name"] = cfg.site_title;
+    }
+    j["publisher"] = pub;
+
+    std::string canonical = page.value("canonical", "");
+    std::string url = !canonical.empty() ? canonical
+                      : resolve_url(cfg.site_base_url, page.value("url", ""));
+    if (!url.empty()) {
+        nlohmann::json meop;
+        meop["@type"] = "WebPage";
+        meop["@id"] = url;
+        j["mainEntityOfPage"] = meop;
+    }
+
+    std::string desc = page.value("description", "");
+    if (desc.empty()) desc = page.value("excerpt", "");
+    if (!desc.empty()) j["description"] = desc;
+
+    nlohmann::json kw = resolve_keywords(page, /*fallback_to_tags=*/true);
+    if (!kw.is_null()) j["keywords"] = kw;
+
+    std::string excerpt = page.value("excerpt", "");
+    if (!excerpt.empty()) j["articleBody"] = excerpt;
+
+    return j;
+}
+
+nlohmann::json build_product_schema(const Config& cfg, const nlohmann::json& page) {
+    nlohmann::json j;
+    j["@context"] = "https://schema.org";
+    j["@type"] = "Product";
+
+    std::string title = page.value("title", "");
+    if (!title.empty()) j["name"] = title;
+
+    std::string desc = page.value("description", "");
+    if (desc.empty()) desc = page.value("excerpt", "");
+    if (!desc.empty()) j["description"] = desc;
+
+    std::string image = page.value("image", "");
+    if (!image.empty()) j["image"] = resolve_url(cfg.site_base_url, image);
+
+    std::string brand = page.value("brand", "");
+    if (!brand.empty()) {
+        nlohmann::json b;
+        b["@type"] = "Brand";
+        b["name"] = brand;
+        j["brand"] = b;
+    }
+
+    if (page.contains("price") && !page["price"].is_null()) {
+        nlohmann::json offer;
+        offer["@type"] = "Offer";
+        offer["price"] = page["price"];
+        if (page.contains("currency") && page["currency"].is_string()) {
+            offer["priceCurrency"] = page["currency"].get<std::string>();
+        }
+        if (page.contains("availability") && page["availability"].is_string()) {
+            offer["availability"] = page["availability"].get<std::string>();
+        }
+        j["offers"] = offer;
+    }
+
+    if (page.contains("rating") && !page["rating"].is_null()) {
+        nlohmann::json ar;
+        ar["@type"] = "AggregateRating";
+        ar["ratingValue"] = page["rating"];
+        if (page.contains("reviewCount") && !page["reviewCount"].is_null()) {
+            ar["reviewCount"] = page["reviewCount"];
+        }
+        j["aggregateRating"] = ar;
+    }
+
+    return j;
+}
+
+nlohmann::json build_software_application_schema(const Config& cfg,
+                                                 const nlohmann::json& page) {
+    nlohmann::json j;
+    j["@context"] = "https://schema.org";
+    j["@type"] = "SoftwareApplication";
+
+    std::string title = page.value("title", "");
+    if (!title.empty()) j["name"] = title;
+
+    std::string desc = page.value("description", "");
+    if (desc.empty()) desc = page.value("excerpt", "");
+    if (!desc.empty()) j["description"] = desc;
+
+    std::string category = page.value("application_category", "");
+    if (category.empty()) category = page.value("category", "");
+    if (!category.empty()) j["applicationCategory"] = category;
+
+    std::string os = page.value("operating_system", "");
+    if (!os.empty()) j["operatingSystem"] = os;
+
+    std::string image = page.value("image", "");
+    if (!image.empty()) j["image"] = resolve_url(cfg.site_base_url, image);
+
+    if (page.contains("price") && !page["price"].is_null()) {
+        nlohmann::json offer;
+        offer["@type"] = "Offer";
+        offer["price"] = page["price"];
+        if (page.contains("currency") && page["currency"].is_string()) {
+            offer["priceCurrency"] = page["currency"].get<std::string>();
+        }
+        if (page.contains("availability") && page["availability"].is_string()) {
+            offer["availability"] = page["availability"].get<std::string>();
+        }
+        j["offers"] = offer;
+    }
+
+    if (page.contains("rating") && !page["rating"].is_null()) {
+        nlohmann::json ar;
+        ar["@type"] = "AggregateRating";
+        ar["ratingValue"] = page["rating"];
+        if (page.contains("reviewCount") && !page["reviewCount"].is_null()) {
+            ar["reviewCount"] = page["reviewCount"];
+        }
+        j["aggregateRating"] = ar;
+    }
+
+    return j;
+}
+
+// Resolve the @type using the documented precedence, build the auto schema,
+// then deep-merge any explicit `page.schema` over it.
+nlohmann::json build_page_schema(const Config& cfg, const nlohmann::json& page) {
+    bool has_schema = page.contains("schema") && page["schema"].is_object();
+
+    std::string type = "WebPage";
+    if (has_schema && page["schema"].contains("@type")
+        && page["schema"]["@type"].is_string()) {
+        type = page["schema"]["@type"].get<std::string>();
+    } else if (page.contains("type") && page["type"].is_string()
+               && !page["type"].get<std::string>().empty()) {
+        type = page["type"].get<std::string>();
+    } else if (is_post(page)) {
+        type = "BlogPosting";
+    }
+
+    nlohmann::json schema;
+    if (type == "Product") {
+        schema = build_product_schema(cfg, page);
+    } else if (type == "SoftwareApplication") {
+        schema = build_software_application_schema(cfg, page);
+    } else if (type == "BlogPosting" || type == "Article"
+               || type == "NewsArticle" || type == "TechArticle") {
+        schema = build_article_schema(cfg, page, type);
+    } else {
+        schema = build_webpage_schema(cfg, page, type);
+    }
+
+    if (has_schema) {
+        deep_merge(schema, page["schema"]);
+    }
+
+    return schema;
+}
+
+// Build a BreadcrumbList walking the URL ancestors. Returns null when the
+// page is root-level (no breadcrumbs to show).
+nlohmann::json build_breadcrumb(const Config& cfg, const nlohmann::json& page,
+                                const nlohmann::json& pages) {
+    std::string url = page.value("url", "");
+    if (url.empty() || url == "/") return nullptr;
+
+    // Split into cumulative prefix URLs: "/posts/hello/" →
+    // ["/", "/posts/", "/posts/hello/"].
+    std::vector<std::string> prefixes;
+    prefixes.push_back("/");
+    {
+        size_t pos = 1;  // skip leading '/'
+        while (pos < url.size()) {
+            size_t next = url.find('/', pos);
+            if (next == std::string::npos) break;
+            prefixes.push_back(url.substr(0, next + 1));
+            pos = next + 1;
+        }
+    }
+    if (prefixes.back() != url) prefixes.push_back(url);
+
+    nlohmann::json items = nlohmann::json::array();
+    int position = 0;
+    for (const auto& prefix : prefixes) {
+        ++position;
+        std::string name;
+        if (prefix == "/") {
+            name = cfg.site_title;
+        } else if (prefix == url) {
+            name = page.value("title", "");
+        } else {
+            for (const auto& p : pages) {
+                if (p.value("url", "") == prefix) {
+                    name = p.value("title", "");
+                    break;
+                }
+            }
+        }
+        if (name.empty()) {
+            // Derive a human-readable name from the final URL segment.
+            std::string seg = prefix;
+            if (!seg.empty() && seg.back() == '/') seg.pop_back();
+            size_t slash = seg.rfind('/');
+            if (slash != std::string::npos) seg = seg.substr(slash + 1);
+            for (char& c : seg) {
+                if (c == '-' || c == '_') c = ' ';
+            }
+            if (!seg.empty()) {
+                seg[0] = static_cast<char>(
+                    std::toupper(static_cast<unsigned char>(seg[0])));
+            }
+            name = seg;
+        }
+
+        nlohmann::json item;
+        item["@type"] = "ListItem";
+        item["position"] = position;
+        item["name"] = name;
+        item["item"] = resolve_url(cfg.site_base_url, prefix);
+        items.push_back(item);
+    }
+
+    nlohmann::json bl;
+    bl["@context"] = "https://schema.org";
+    bl["@type"] = "BreadcrumbList";
+    bl["itemListElement"] = items;
+    return bl;
+}
+
+} // anonymous namespace
+
+std::string build_website_script(const Config& cfg) {
+    return make_script(build_website_schema(cfg));
+}
+
+std::string build_organization_script(const Config& cfg) {
+    if (cfg.org_name.empty()) return "";
+    return make_script(build_organization_schema(cfg));
+}
+
+std::vector<SchemaIssue> validate(const nlohmann::json& s,
+                                  const std::string& page_url) {
+    std::vector<SchemaIssue> issues;
+    if (!s.is_object()) return issues;
+    std::string type = s.value("@type", "");
+
+    // Walk a dotted path; return true only if the value is present and
+    // non-empty (strings non-empty, not null).
+    auto has_nonempty = [&](const std::string& dotted) -> bool {
+        const nlohmann::json* cur = &s;
+        std::stringstream ss(dotted);
+        std::string key;
+        while (std::getline(ss, key, '.')) {
+            if (!cur->is_object() || !cur->contains(key)) return false;
+            cur = &(*cur)[key];
+        }
+        if (cur->is_null()) return false;
+        if (cur->is_string()) return !cur->get<std::string>().empty();
+        return true;
+    };
+
+    auto require = [&](const std::string& field) {
+        if (!has_nonempty(field)) {
+            issues.push_back({page_url, type, field, "missing or empty required field"});
+        }
+    };
+
+    if (type == "WebPage") {
+        require("name");
+    } else if (type == "BlogPosting" || type == "Article" || type == "NewsArticle") {
+        require("headline");
+        require("datePublished");
+        require("author");
+    } else if (type == "TechArticle") {
+        require("headline");
+        require("datePublished");
+    } else if (type == "Product") {
+        require("name");
+        require("offers.price");
+    } else if (type == "SoftwareApplication") {
+        require("name");
+        require("applicationCategory");
+    }
+    // Unknown types: skip.
+
+    return issues;
+}
+
+std::string build_json_ld(const Config& cfg, const nlohmann::json& page,
+                          const nlohmann::json& pages) {
+    if (!cfg.json_ld_enabled) return "";
+
+    std::string out;
+
+    // 1. Site-wide WebSite schema (always).
+    out += make_script(build_website_schema(cfg));
+
+    // 2. Organization schema when configured.
+    if (!cfg.org_name.empty()) {
+        out += make_script(build_organization_schema(cfg));
+    }
+
+    // 3. Page-level schema (+ validation warnings to stderr).
+    nlohmann::json page_schema = build_page_schema(cfg, page);
+    std::string page_url = page.value("url", "");
+    for (const auto& issue : validate(page_schema, page_url)) {
+        std::cerr << utils::warning_label() << " json-ld [" << issue.schema_type
+                  << "] " << issue.page_url << ": '" << issue.field << "' — "
+                  << issue.message << "\n";
+    }
+    out += make_script(page_schema);
+
+    // 4. BreadcrumbList for nested pages (includes the current page as the
+    //    last item per Schema.org spec).
+    if (!page_url.empty() && page_url != "/") {
+        nlohmann::json bl = build_breadcrumb(cfg, page, pages);
+        if (!bl.is_null()) out += make_script(bl);
+    }
+
+    // 5. Each schema_extra entry verbatim (array of objects, or a single object).
+    if (page.contains("schema_extra") && !page["schema_extra"].is_null()) {
+        const auto& extra = page["schema_extra"];
+        if (extra.is_array()) {
+            for (const auto& e : extra) {
+                if (e.is_object()) out += make_script(e);
+            }
+        } else if (extra.is_object()) {
+            out += make_script(extra);
+        }
+    }
+
+    return out;
+}
+
+} // namespace seo_schema
+} // namespace modules
+} // namespace cstatic

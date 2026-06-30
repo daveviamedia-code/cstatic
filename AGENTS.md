@@ -159,6 +159,13 @@ modules.json_feed_output = "feed.json"
 modules.llms_txt_max_pages = 0              # 0 = no cap; llms-full.txt always complete
 modules.llms_txt_exclude = ["/tags/*"]      # glob against page URLs
 
+[seo]
+json_ld_enabled = true                     # Schema.org JSON-LD (GEO keystone)
+org_name = "My Site Inc"                   # enables site-wide Organization schema
+org_logo = "/logo.png"
+org_same_as = ["https://twitter.com/you"]
+website_search_url_template = "/search?q={search_term_string}"
+
 [og_images]
 enabled = true             # per-page social cards from an SVG template
 template = "og-default"    # templates/og-default.svg (scaffolded)
@@ -167,7 +174,7 @@ template = "og-default"    # templates/og-default.svg (scaffolded)
 exclude = ["/404.html"]    # URL paths to drop from sitemap
 ```
 
-In every layout's `<head>`, add `{{ seo_meta }}` — it emits description, Open Graph, Twitter Card, and canonical tags; missing variables render empty, so it is always safe.
+In every layout's `<head>`, add `{{ seo_meta }}` — it emits description, Open Graph, Twitter Card, and canonical tags; missing variables render empty, so it is always safe. When `seo.json_ld_enabled = true`, `{{ seo_meta }}` **also** appends Schema.org JSON-LD `<script>` blocks: a site-wide WebSite (+ Organization when `org_name` is set), a page-level schema whose `@type` auto-resolves from `page.type` / URL (`BlogPosting` for `/posts/...`, else `WebPage`; `Product`/`SoftwareApplication` mapped from commerce fields), a `BreadcrumbList` for nested URLs, and each `page.schema_extra` entry verbatim. An explicit `page.schema` object deep-merges over the auto-generated one. This is the keystone GEO feature — Google AI Overviews, ChatGPT, and Perplexity weight JSON-LD heavily when citing.
 
 ### 5.7 Add data-driven pages
 
@@ -221,6 +228,7 @@ Full reference: `docs/config.md`. Most-used keys:
 | `[build.markdown]` | `extensions`, `shortcodes_dir`, `wikilinks` | all ext / `shortcodes` / `false` | `extensions` ∈ `table`,`tasklist`,`strikethrough`,`autolink`. |
 | `[modules]` | `sitemap`, `rss`, `json_feed`, `robots`, `llms_txt` | `T`/`F`/`F`/`F`/`F` | Plus `rss_title`/`rss_description`/`rss_item_count`, `json_feed_output`, `llms_txt_description`/`llms_txt_max_pages`/`llms_txt_exclude`, `robots_*` (incl. `robots_ai_crawlers_mode` ∈ `off`\|`allow`\|`disallow`\|`custom` + `robots_ai_crawlers_custom`). `llms_txt` writes `/llms.txt` + `/llms-full.txt`; summary falls back to `site.description`. |
 | `[og_images]` | `enabled`, `template`, `output_format`, `width`, `height`, `output_dir` | `F`/`og-default`/`png`/`1200`/`630`/`og` | PNG needs rsvg-convert/convert/inkscape. |
+| `[seo]` | `json_ld_enabled` + `org_*` + `website_search_url_template` | `F` / empty | JSON-LD structured data. `org_name` enables Organization schema; `website_search_url_template` adds WebSite SearchAction. |
 | `[sitemap]` | `exclude` | `[]` | URL paths to drop. |
 | `[data]` | `data_dir` | `_data` | |
 | `[[data_source]]` | `file`, `template`, `url_pattern`, `item_key`, `per_page`, `per_item` | — | Array of tables. |
@@ -247,8 +255,13 @@ Full reference: `docs/config.md`. Most-used keys:
 | `canonical` | `base_url+url` | Canonical URL override. |
 | `sitemap_changefreq` | — | e.g. `monthly`. |
 | `sitemap_priority` | — | e.g. `0.8`. |
+| `type` | — | Schema.org `@type` override (e.g. `"Product"`, `"Article"`). Read by JSON-LD when `seo.json_ld_enabled = true`. |
+| `author` | — | String name; articles emit it as `{@type:Person, name}`. |
+| `schema` | — | Object deep-merged over the auto-generated JSON-LD schema. Use `schema["@type"]` to override the type. |
+| `schema_extra` | — | Array (or object) emitted verbatim as extra JSON-LD `<script>` blocks. |
+| `keywords` | — | Array or comma string; articles fall back to comma-joined `tags`. |
 
-Any extra field becomes `page.<field_name>` in templates.
+Any extra field becomes `page.<field_name>` in templates. Commerce fields (`brand`, `price`, `currency`, `availability`, `rating`, `reviewCount`) and app fields (`application_category`/`category`, `operating_system`) are read by the `Product`/`SoftwareApplication` JSON-LD builders.
 
 ## 8. Template context variables
 
@@ -263,7 +276,7 @@ Any extra field becomes `page.<field_name>` in templates.
 | `collections` | All collections keyed by name, e.g. `{{ collections.posts }}`. |
 | `collection` | On a collection index page: `name`, `pages`. |
 | `taxonomy` | On taxonomy pages: `key`, `term`, `pages` (term) or `terms` (index). |
-| `seo_meta` | Auto OG / Twitter Card / canonical meta tags. |
+| `seo_meta` | Auto OG / Twitter Card / canonical meta tags. When `seo.json_ld_enabled = true`, also appends Schema.org JSON-LD `<script>` blocks (WebSite + Organization + page schema + BreadcrumbList + schema_extra). |
 
 ## 9. Agent gotchas (read before writing templates/config)
 

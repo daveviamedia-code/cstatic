@@ -17,6 +17,7 @@ A fast, minimal static site generator written in C++17.
 - **Build profiles** — Per-environment config overlays via `--env` (e.g. `config.production.toml`) with `{{ site.env }}` template variable
 - **Page aliases** — Frontmatter `aliases` array generates HTML redirect pages at old URLs, included in sitemap
 - **SEO meta tags** — Automatic Open Graph, Twitter Card, and canonical link tags via `{{ seo_meta }}` template variable
+- **Schema.org JSON-LD** — Opt-in structured data (`seo.json_ld_enabled`) emits WebSite + Organization + per-page schemas (auto-typed: `BlogPosting`, `Article`, `Product`, `SoftwareApplication`, …) + `BreadcrumbList` for GEO/AI-search citation
 - **OG image generation** — Per-page social-card images from Inja SVG templates, converted to PNG via rsvg-convert/ImageMagick/Inkscape
 - **Content scaffolding** — `cstatic new` creates pages from archetypes (`archetypes/<kind>.md`) with `{{ title }}`, `{{ slug }}`, and `{{ date }}` placeholders
 - **Scheduled publishing** — Pages with a future `date` are automatically skipped until their date arrives (toggle with `build.publish_future`)

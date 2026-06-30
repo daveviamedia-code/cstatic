@@ -25,6 +25,7 @@ set(LIB_SOURCES
     ${CMAKE_SOURCE_DIR}/src/modules/json_feed.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/llms_txt.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/robots.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/seo_schema.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/search.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/og_images.cpp
     ${CMAKE_SOURCE_DIR}/src/server/file_watcher.cpp
@@ -55,6 +56,7 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/tests/test_file_watcher.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_robots.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_llms_txt.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_seo_schema.cpp
 )
 
 add_executable(cstatic_tests ${TEST_SOURCES} ${LIB_SOURCES})

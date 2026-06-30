@@ -1,6 +1,6 @@
 ---
 name: cstatic-configure-seo
-description: Configure SEO and feeds for a C-Static site. Use when the user says "enable sitemap", "RSS feed", "JSON feed", "robots.txt", "OG images", "social cards", "seo_meta", "SEO setup", "AI crawlers", "GEO", or "allow GPTBot/ClaudeBot". Covers modules, {{ seo_meta }}, og_images, AI crawler allowlist, and sitemap excludes.
+description: Configure SEO and feeds for a C-Static site. Use when the user says "enable sitemap", "RSS feed", "JSON feed", "robots.txt", "OG images", "social cards", "seo_meta", "SEO setup", "AI crawlers", "GEO", "JSON-LD", "structured data", "Schema.org", or "allow GPTBot/ClaudeBot". Covers modules, {{ seo_meta }}, og_images, AI crawler allowlist, JSON-LD structured data, and sitemap excludes.
 ---
 
 # Skill: Configure SEO & feeds
@@ -80,7 +80,40 @@ C-Static can generate a sitemap, RSS feed, JSON Feed, robots.txt, and per-page s
 
 6. **Per-page SEO overrides** via frontmatter: `description`, `image`, `canonical`, `sitemap_changefreq`, `sitemap_priority`.
 
-7. **Build:** `cstatic build`.
+7. **(Optional, GEO keystone) Enable Schema.org JSON-LD** so AI search engines (Google AI Overviews, ChatGPT, Perplexity, Bing Copilot) can richly cite your pages. When on, `{{ seo_meta }}` appends `<script type="application/ld+json">` blocks: site-wide WebSite (+ Organization when `seo.org_name` is set), a page schema whose `@type` auto-resolves from `page.type` / URL, a `BreadcrumbList` for nested pages, and each `page.schema_extra` entry verbatim. Default off preserves existing output.
+
+   ```toml
+   [seo]
+   json_ld_enabled = true
+   org_name = "My Site Inc"            # enables site-wide Organization schema
+   org_logo = "/logo.png"
+   org_founding_date = "2015-01-01"
+   org_founders = ["Alice"]
+   org_same_as = ["https://twitter.com/you"]
+   website_search_url_template = "/search?q={search_term_string}"
+   ```
+
+   Per-page frontmatter drives the page schema:
+
+   ```markdown
+   ---
+   title: Launch Day
+   type: Article           # @type override (BlogPosting auto-inferred for /posts/...)
+   author: Jane Doe        # → {@type:Person, name}
+   keywords: [launch, news]
+   schema:                 # deep-merged over the auto-generated schema
+     isAccessibleForFree: true
+   schema_extra:           # array emitted verbatim as extra <script> blocks
+     - "@type": FAQPage
+       mainEntity:
+         "@type": Question
+         name: What is this?
+   ---
+   ```
+
+   For commerce pages use `type = "Product"` (or `"SoftwareApplication"`) plus `brand`, `price`, `currency`, `availability`, `rating`, `reviewCount`, and (for apps) `application_category` / `operating_system`. Missing required fields surface as non-fatal `warn:` lines on stderr.
+
+8. **Build:** `cstatic build`.
 
 ## Gotchas
 
@@ -90,3 +123,5 @@ C-Static can generate a sitemap, RSS feed, JSON Feed, robots.txt, and per-page s
 - Drafts and future-dated pages are excluded from feeds and the sitemap automatically.
 - `sitemap.exclude` takes **URL paths** (e.g. `/404.html`), not file paths.
 - `{{ seo_meta }}` values are XML-escaped; safe to insert raw into `<head>`.
+- JSON-LD is **off by default** — existing builds are unchanged until you set `seo.json_ld_enabled = true`. The `BlogPosting` default is inferred only for URLs under `/posts/...`; use `type: Article` (etc.) in frontmatter to override.
+- JSON-LD `page.schema` deep-merges: auto-generated fields (`headline`, `datePublished`, `author`, `image`, `url`...) are preserved; only the keys you list are overridden. Use `schema_extra` (array) when you need entirely separate top-level schemas (FAQ, Event, etc.).

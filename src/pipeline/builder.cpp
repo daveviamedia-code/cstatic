@@ -722,6 +722,25 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
             }
         }
 
+        // G5: Standalone `##?` FAQ extraction. Questions left in the body
+        // after schema blocks (G4) are standalone Q&A. Render visible
+        // <details>, expose page.faq, and merge a FAQPage into schema_extra
+        // (combining with any G4 FAQPage) so seo_schema::build_json_ld (G3)
+        // emits one merged FAQPage. Runs before wikilinks / render_markdown so
+        // the emitted raw HTML survives into the final document.
+        {
+            auto sfaq = process_standalone_faq(body);
+            if (sfaq.found) {
+                body = sfaq.body;
+                auto& custom = rp.parsed.frontmatter.custom;
+                custom["faq"] = sfaq.faq_ctx;
+                if (!custom.contains("schema_extra") || !custom["schema_extra"].is_array()) {
+                    custom["schema_extra"] = nlohmann::json::array();
+                }
+                merge_faq_into_schema_extra(custom["schema_extra"], sfaq.questions);
+            }
+        }
+
         // Rewrite [[wikilinks]] -> <a href>. Done AFTER shortcodes so a
         // shortcode body can introduce wikilinks, and BEFORE render_markdown
         // so the emitted raw HTML survives into the final document.

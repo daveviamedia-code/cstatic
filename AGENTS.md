@@ -178,6 +178,8 @@ In every layout's `<head>`, add `{{ seo_meta }}` — it emits description, Open 
 
 **Schema blocks** author `schema_extra` from markdown. `{% schema "FAQPage" %}...{% endschema %}` (with `##? question` headings), `{% schema "HowTo" %}` (with `##! step` headings), and `{% schema "Review" item="…" rating="N" %}` each emit visible HTML **and** a matching JSON-LD object that flows into `schema_extra`. No config flag; runs after shortcodes, before wikilinks/cmark. Unknown types `warn:` and pass content through. See `docs/config.md` → Schema Blocks.
 
+**Standalone `##?` FAQ extraction** (no config flag). `##? question` headings **outside** any `{% schema %}` wrapper are also auto-processed: each renders the same `<section class="faq"><details><summary>…</summary>…</details>` visible HTML, populates a `{{ page.faq }}` array (`[{question, answer_html, answer_text}]`) for custom layouts, and merges a `FAQPage` into `schema_extra`. If the page also has a `{% schema "FAQPage" %}` block, the two are combined into ONE `FAQPage` whose `mainEntity` holds every question. Answer-boundary semantics match the schema block (an answer runs to the next `##?` or end of body), so standalone FAQ is terminal content — place it last on the page.
+
 ### 5.7 Add data-driven pages
 
 ```toml
@@ -260,7 +262,7 @@ Full reference: `docs/config.md`. Most-used keys:
 | `type` | — | Schema.org `@type` override (e.g. `"Product"`, `"Article"`). Read by JSON-LD when `seo.json_ld_enabled = true`. |
 | `author` | — | String name; articles emit it as `{@type:Person, name}`. |
 | `schema` | — | Object deep-merged over the auto-generated JSON-LD schema. Use `schema["@type"]` to override the type. |
-| `schema_extra` | — | Array (or object) emitted verbatim as extra JSON-LD `<script>` blocks. Auto-populated by `{% schema %}` blocks (FAQPage/HowTo/Review). |
+| `schema_extra` | — | Array (or object) emitted verbatim as extra JSON-LD `<script>` blocks. Auto-populated by `{% schema %}` blocks (FAQPage/HowTo/Review) and by standalone `##?` FAQ extraction. |
 | `keywords` | — | Array or comma string; articles fall back to comma-joined `tags`. |
 
 Any extra field becomes `page.<field_name>` in templates. Commerce fields (`brand`, `price`, `currency`, `availability`, `rating`, `reviewCount`) and app fields (`application_category`/`category`, `operating_system`) are read by the `Product`/`SoftwareApplication` JSON-LD builders.
@@ -270,7 +272,7 @@ Any extra field becomes `page.<field_name>` in templates. Commerce fields (`bran
 | Variable | Description |
 |----------|-------------|
 | `site` | Site config: `title`, `base_url`, `language`, `env` (current env name), `twitter_handle`. |
-| `page` | Current page: `title`, `url`, `content`, `date`, `tags`, `excerpt`, plus any extra frontmatter. Gains `backlinks` when wikilinks are on. |
+| `page` | Current page: `title`, `url`, `content`, `date`, `tags`, `excerpt`, plus any extra frontmatter. Gains `backlinks` when wikilinks are on. Gains `faq` (`[{question, answer_html, answer_text}]`) when standalone `##?` questions are present. |
 | `pages` | All pages, sorted by date (newest first). Excludes drafts, future-scheduled, and alias redirect stubs. |
 | `data` | All loaded data files, keyed by filename stem. |
 | `item` | Current data item (data-driven pages with `per_item`). |
@@ -279,6 +281,7 @@ Any extra field becomes `page.<field_name>` in templates. Commerce fields (`bran
 | `collection` | On a collection index page: `name`, `pages`. |
 | `taxonomy` | On taxonomy pages: `key`, `term`, `pages` (term) or `terms` (index). |
 | `seo_meta` | Auto OG / Twitter Card / canonical meta tags. When `seo.json_ld_enabled = true`, also appends Schema.org JSON-LD `<script>` blocks (WebSite + Organization + page schema + BreadcrumbList + schema_extra). |
+| `page.faq` | Array of `{question, answer_html, answer_text}` for each standalone `##?` heading on the page (empty when none). Use to render custom FAQ sidebars/layouts; the body HTML always renders inline regardless. |
 
 ## 9. Agent gotchas (read before writing templates/config)
 

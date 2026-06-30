@@ -12,6 +12,8 @@
 using cstatic::Config;
 using cstatic::SchemaBlockProcessor;
 using cstatic::extract_faq_pairs;
+using cstatic::process_standalone_faq;
+using cstatic::merge_faq_into_schema_extra;
 using cstatic::modules::seo_schema::build_json_ld;
 
 namespace {
@@ -199,5 +201,153 @@ TEST_CASE("Schema block processor", "[schema_blocks]") {
         std::string html = build_json_ld(cfg, page, nlohmann::json::array());
         REQUIRE(contains(html, "\"@type\": \"FAQPage\""));
         REQUIRE(contains(html, "\"@type\": \"Question\""));
+    }
+}
+
+TEST_CASE("Standalone FAQ extraction", "[faq_extraction]") {
+    SchemaBlockProcessor sbp;
+
+    SECTION("process_standalone_faq renders details + collects ctx and questions") {
+        std::string body =
+            "This is the intro prose.\n\n"
+            "More preamble.\n\n"
+            "##? What is C-Static?\n"
+            "A fast C++ static site generator.\n\n"
+            "##? Is it free?\n"
+            "Yes, MIT licensed.\n";
+        auto res = process_standalone_faq(body);
+
+        REQUIRE(res.found);
+        // Prefix prose preserved.
+        REQUIRE(contains(res.body, "This is the intro prose."));
+        REQUIRE(contains(res.body, "More preamble."));
+        // Markers gone from body.
+        REQUIRE_FALSE(contains(res.body, "##?"));
+        // Visible HTML.
+        REQUIRE(contains(res.body, "<section class=\"faq\">"));
+        REQUIRE(contains(res.body, "<summary>What is C-Static?</summary>"));
+        REQUIRE(contains(res.body, "<summary>Is it free?</summary>"));
+        REQUIRE(contains(res.body, "</details>"));
+        REQUIRE(contains(res.body, "</section>"));
+        // Context: 2 entries with question + answer fields.
+        REQUIRE(res.faq_ctx.is_array());
+        REQUIRE(res.faq_ctx.size() == 2);
+        REQUIRE(res.faq_ctx[0]["question"] == "What is C-Static?");
+        REQUIRE(contains(res.faq_ctx[0]["answer_text"].get<std::string>(), "fast"));
+        REQUIRE(res.faq_ctx[1]["question"] == "Is it free?");
+        // Questions: 2 Question schema objects.
+        REQUIRE(res.questions.size() == 2);
+        REQUIRE(res.questions[0]["@type"] == "Question");
+        REQUIRE(res.questions[0]["acceptedAnswer"]["@type"] == "Answer");
+    }
+
+    SECTION("No ##? questions returns found=false and body unchanged") {
+        std::string body = "# Title\n\nNo questions here.\n";
+        auto res = process_standalone_faq(body);
+        REQUIRE_FALSE(res.found);
+        REQUIRE(res.body == body);
+        REQUIRE(res.faq_ctx.is_array());
+        REQUIRE(res.faq_ctx.empty());
+        REQUIRE(res.questions.empty());
+    }
+
+    SECTION("merge_faq_into_schema_extra creates a new FAQPage") {
+        std::vector<nlohmann::json> questions;
+        nlohmann::json q1;
+        q1["@type"] = "Question";
+        q1["name"]  = "Q1";
+        questions.push_back(q1);
+
+        nlohmann::json schema_extra = nlohmann::json::array();
+        merge_faq_into_schema_extra(schema_extra, questions);
+
+        REQUIRE(schema_extra.is_array());
+        REQUIRE(schema_extra.size() == 1);
+        REQUIRE(schema_extra[0]["@type"] == "FAQPage");
+        REQUIRE(schema_extra[0]["mainEntity"].is_array());
+        REQUIRE(schema_extra[0]["mainEntity"].size() == 1);
+        REQUIRE(schema_extra[0]["mainEntity"][0]["name"] == "Q1");
+    }
+
+    SECTION("merge_faq_into_schema_extra appends to existing FAQPage mainEntity") {
+        nlohmann::json schema_extra = nlohmann::json::array();
+        nlohmann::json existing;
+        existing["@context"] = "https://schema.org";
+        existing["@type"]    = "FAQPage";
+        existing["mainEntity"] = nlohmann::json::array();
+        nlohmann::json q0;
+        q0["@type"] = "Question";
+        q0["name"]  = "Q0";
+        existing["mainEntity"].push_back(q0);
+        schema_extra.push_back(existing);
+
+        std::vector<nlohmann::json> questions;
+        nlohmann::json q1;
+        q1["@type"] = "Question";
+        q1["name"]  = "Q1";
+        questions.push_back(q1);
+
+        merge_faq_into_schema_extra(schema_extra, questions);
+
+        REQUIRE(schema_extra.size() == 1);
+        REQUIRE(schema_extra[0]["@type"] == "FAQPage");
+        REQUIRE(schema_extra[0]["mainEntity"].size() == 2);
+        REQUIRE(schema_extra[0]["mainEntity"][0]["name"] == "Q0");
+        REQUIRE(schema_extra[0]["mainEntity"][1]["name"] == "Q1");
+    }
+
+    SECTION("End-to-end: G4 FAQPage block + trailing standalone ##? merge") {
+        std::string md =
+            "{% schema \"FAQPage\" %}\n"
+            "##? Wrapped question\n"
+            "Wrapped answer.\n"
+            "{% endschema %}\n\n"
+            "##? Standalone question\n"
+            "Standalone answer.\n";
+        std::vector<nlohmann::json> schemas;
+        std::string transformed = sbp.process(md, schemas);
+        REQUIRE(schemas.size() == 1);
+        REQUIRE(schemas[0]["@type"] == "FAQPage");
+        REQUIRE(schemas[0]["mainEntity"].size() == 1);
+
+        auto sfaq = process_standalone_faq(transformed);
+        REQUIRE(sfaq.found);
+        REQUIRE(sfaq.questions.size() == 1);
+        REQUIRE(sfaq.questions[0]["name"] == "Standalone question");
+
+        nlohmann::json schema_extra = schemas;
+        merge_faq_into_schema_extra(schema_extra, sfaq.questions);
+        REQUIRE(schema_extra.size() == 1);
+        REQUIRE(schema_extra[0]["@type"] == "FAQPage");
+        REQUIRE(schema_extra[0]["mainEntity"].size() == 2);
+        REQUIRE(schema_extra[0]["mainEntity"][0]["name"] == "Wrapped question");
+        REQUIRE(schema_extra[0]["mainEntity"][1]["name"] == "Standalone question");
+    }
+
+    SECTION("Standalone FAQ flows into build_json_ld via merged schema_extra") {
+        std::string body =
+            "Intro.\n\n"
+            "##? What is this?\n"
+            "A FAQ entry.\n";
+        auto sfaq = process_standalone_faq(body);
+        REQUIRE(sfaq.found);
+
+        nlohmann::json schema_extra = nlohmann::json::array();
+        merge_faq_into_schema_extra(schema_extra, sfaq.questions);
+
+        Config cfg;
+        cfg.site_title = "S";
+        cfg.site_base_url = "https://example.com";
+        cfg.json_ld_enabled = true;
+
+        nlohmann::json page;
+        page["title"] = "P";
+        page["url"] = "/p/";
+        page["schema_extra"] = schema_extra;
+
+        std::string html = build_json_ld(cfg, page, nlohmann::json::array());
+        REQUIRE(contains(html, "\"@type\": \"FAQPage\""));
+        REQUIRE(contains(html, "\"@type\": \"Question\""));
+        REQUIRE(contains(html, "What is this?"));
     }
 }

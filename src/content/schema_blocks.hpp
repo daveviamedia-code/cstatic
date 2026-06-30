@@ -61,4 +61,24 @@ struct FaqPair {
 // or the end of the text (trailing whitespace trimmed).
 std::vector<FaqPair> extract_faq_pairs(const std::string& text);
 
+// G5: process standalone `##?` FAQ pairs remaining in the body after schema
+// blocks (G4) consumed their wrappers. Reuses extract_faq_pairs. `body` is
+// returned with the FAQ region replaced by visible <details> HTML (content
+// before the first `##?` line is preserved). `found` is false when the body
+// has no standalone `##?` questions (body returned unchanged).
+struct StandaloneFaqResult {
+    std::string body;                        // body with FAQ region -> visible <details>
+    nlohmann::json faq_ctx;                  // [{question, answer_html, answer_text}]
+    std::vector<nlohmann::json> questions;   // Question schema objects (for FAQPage)
+    bool found = false;
+};
+StandaloneFaqResult process_standalone_faq(const std::string& body);
+
+// Merge Question schema objects into a FAQPage inside `schema_extra` (a JSON
+// array): appends to an existing FAQPage's mainEntity, else pushes a new
+// FAQPage entry. Lets G5 combine standalone ##? pairs with a G4 {% schema
+// "FAQPage" %} block on the same page into one FAQPage.
+void merge_faq_into_schema_extra(nlohmann::json& schema_extra,
+                                 const std::vector<nlohmann::json>& questions);
+
 } // namespace cstatic

@@ -103,6 +103,39 @@ extract_marker_pairs(const std::string& text, const std::string& marker) {
     return out;
 }
 
+// Per-pair FAQ rendering shared by the G4 schema block (render_faq) and the G5
+// standalone extractor (process_standalone_faq). Produces the visible
+// <details> HTML, a {question, answer_html, answer_text} context entry for
+// page.faq, and a complete Question schema object.
+struct FaqItem {
+    std::string details_html;
+    nlohmann::json ctx_entry;
+    nlohmann::json question;
+};
+FaqItem render_faq_pair(const FaqPair& p) {
+    std::string ans_html = render_markdown(p.answer_md);
+    std::string ans_text = trim_ws(utils::strip_html_tags(ans_html));
+
+    nlohmann::json q;
+    q["@type"] = "Question";
+    q["name"]  = p.question;
+    nlohmann::json a;
+    a["@type"] = "Answer";
+    a["text"]  = ans_text;
+    q["acceptedAnswer"] = a;
+
+    std::string html = "<details>\n";
+    html += "<summary>" + escape_html(p.question) + "</summary>\n";
+    if (!ans_html.empty()) html += ans_html + "\n";
+    html += "</details>\n";
+
+    nlohmann::json ctx;
+    ctx["question"]    = p.question;
+    ctx["answer_html"] = ans_html;
+    ctx["answer_text"] = ans_text;
+    return {std::move(html), std::move(ctx), std::move(q)};
+}
+
 // Render FAQPage: `##? question` headings → Question/AcceptedAnswer schema and
 // a <section class="faq"><details>… visible block. Emits no schema (and passes
 // the content through) when the block contains no questions.
@@ -119,22 +152,9 @@ std::string render_faq(const std::string& inner,
     nlohmann::json entity = nlohmann::json::array();
     std::string html = "<section class=\"faq\">\n";
     for (const auto& p : pairs) {
-        std::string ans_html  = render_markdown(p.answer_md);
-        std::string ans_text  = trim_ws(utils::strip_html_tags(ans_html));
-
-        nlohmann::json q;
-        q["@type"] = "Question";
-        q["name"]  = p.question;
-        nlohmann::json a;
-        a["@type"] = "Answer";
-        a["text"]  = ans_text;
-        q["acceptedAnswer"] = a;
-        entity.push_back(q);
-
-        html += "<details>\n";
-        html += "<summary>" + escape_html(p.question) + "</summary>\n";
-        if (!ans_html.empty()) html += ans_html + "\n";
-        html += "</details>\n";
+        auto item = render_faq_pair(p);
+        entity.push_back(std::move(item.question));
+        html += std::move(item.details_html);
     }
     html += "</section>";
 
@@ -302,6 +322,90 @@ std::vector<FaqPair> extract_faq_pairs(const std::string& text) {
         out.push_back(std::move(fp));
     }
     return out;
+}
+
+StandaloneFaqResult process_standalone_faq(const std::string& body) {
+    StandaloneFaqResult res;
+    res.body = body;
+
+    auto pairs = extract_faq_pairs(body);
+    if (pairs.empty()) {
+        res.faq_ctx = nlohmann::json::array();
+        return res;
+    }
+
+    // Locate the first `##?` heading line so content before it (intro prose,
+    // earlier sections) is preserved verbatim. `(^|\n)` lets the marker start
+    // the body without a leading newline; the captured newline (if any) is
+    // kept with the prefix.
+    std::string prefix;
+    {
+        static const std::regex start_re(R"((^|\n)##\?[ \t])");
+        std::smatch m;
+        if (std::regex_search(body.cbegin(), body.cend(), m, start_re)) {
+            // m[1] is the captured `^` (zero-width) or `\n`.
+            size_t nl_len = (m[1].matched && !m[1].str().empty()) ? m[1].str().size() : 0;
+            size_t line_start = static_cast<size_t>(m.position()) + nl_len;
+            prefix = body.substr(0, line_start);
+        } else {
+            // extract_faq_pairs found headings but the regex didn't — fall back
+            // to whole-body treatment (shouldn't happen, but stay safe).
+            prefix.clear();
+        }
+    }
+
+    std::string section = "<section class=\"faq\">\n";
+    auto ctx_arr = nlohmann::json::array();
+    auto q_arr   = std::vector<nlohmann::json>{};
+    for (const auto& p : pairs) {
+        auto item = render_faq_pair(p);
+        section += std::move(item.details_html);
+        ctx_arr.push_back(std::move(item.ctx_entry));
+        q_arr.push_back(std::move(item.question));
+    }
+    section += "</section>";
+
+    // Blank-line separation so cmark-gfm treats the emitted HTML as a raw HTML
+    // block via CMARK_OPT_UNSAFE (same trick render_faq's caller uses).
+    std::string new_body = prefix;
+    if (!new_body.empty() && new_body.back() != '\n') new_body += '\n';
+    new_body += "\n";
+    new_body += section;
+    new_body += "\n";
+
+    res.body      = std::move(new_body);
+    res.faq_ctx   = std::move(ctx_arr);
+    res.questions = std::move(q_arr);
+    res.found     = true;
+    return res;
+}
+
+void merge_faq_into_schema_extra(nlohmann::json& schema_extra,
+                                 const std::vector<nlohmann::json>& questions) {
+    if (questions.empty()) return;
+
+    if (!schema_extra.is_array()) {
+        schema_extra = nlohmann::json::array();
+    }
+
+    // Append to the first existing FAQPage's mainEntity, if any.
+    for (auto& entry : schema_extra) {
+        if (entry.is_object() &&
+            entry.value("@type", std::string{}) == "FAQPage") {
+            if (!entry.contains("mainEntity") || !entry["mainEntity"].is_array()) {
+                entry["mainEntity"] = nlohmann::json::array();
+            }
+            for (const auto& q : questions) entry["mainEntity"].push_back(q);
+            return;
+        }
+    }
+
+    nlohmann::json faq;
+    faq["@context"]   = "https://schema.org";
+    faq["@type"]      = "FAQPage";
+    faq["mainEntity"] = nlohmann::json::array();
+    for (const auto& q : questions) faq["mainEntity"].push_back(q);
+    schema_extra.push_back(std::move(faq));
 }
 
 } // namespace cstatic

@@ -378,6 +378,26 @@ Visible: `<div class="review" data-rating="5">…</div>`. `rating` is optional (
 
 Unknown types print a non-fatal `warn:` on stderr and pass the inner content through without emitting a schema. A `FAQPage`/`HowTo` block with no `##?`/`##!` markers behaves the same way. Blocks do not nest.
 
+#### Standalone `##?` FAQ extraction
+
+`##? question` headings **outside** any `{% schema %}` wrapper are also auto-processed: each renders the same `<section class="faq"><details><summary>…</summary>…</details>` visible HTML as a `FAQPage` schema block, and a `FAQPage` JSON-LD object is merged into `schema_extra` (emitted verbatim when `[seo] json_ld_enabled = true`). This is the common authoring case — a trailing FAQ section needs no wrapper ceremony:
+
+```markdown
+# Pricing
+
+Plans start at $0…
+
+##? Is there a free tier?
+Yes — the Hobby plan is free forever.
+
+##? Do you offer refunds?
+Full refund within 30 days, no questions asked.
+```
+
+Each question also populates a `{{ page.faq }}` array (`[{question, answer_html, answer_text}]`) for custom sidebars or JSON exports; the inline body HTML always renders regardless of templates.
+
+If a page has **both** a `{% schema "FAQPage" %}` block and trailing standalone `##?` questions, the two are merged into ONE `FAQPage` whose `mainEntity` holds every question — AI engines see a single coherent Q&A document. Answer-boundary semantics match the schema block (an answer runs to the next `##?` or end of body), so standalone FAQ is **terminal content** — place it last on the page. No config flag (pure opt-in syntax).
+
 ### Wikilinks & Backlinks
 
 Wikilinks provide a slug-or-title shorthand for cross-referencing pages, and the build automatically exposes the reverse relationship (`page.backlinks`) to templates. Enable with:

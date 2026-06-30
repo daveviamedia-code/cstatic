@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-06-30
+
+### Added
+- Standalone FAQ extraction — `##? question` headings anywhere in a markdown body (not just inside a G4 `{% schema "FAQPage" %}` wrapper) now auto-build a `FAQPage` JSON-LD schema and render to the same collapsible `<section class="faq"><details><summary>…</summary>…</details>` visible HTML. The most common authoring case (a trailing FAQ section with no ceremony) is zero-config: just write `##?` headings. Each question also populates a new `{{ page.faq }}` template-context array (`[{question, answer_html, answer_text}]`) for custom sidebars/layouts. When a page has BOTH a G4 `{% schema "FAQPage" %}` block and trailing standalone `##?` questions, the two are merged into ONE `FAQPage` whose `mainEntity` holds every question (so AI engines see a single coherent Q&A document). The merged `FAQPage` rides the existing `schema_extra` channel that G3 emits verbatim when `[seo] json_ld_enabled = true`; visible HTML renders regardless. Answer-boundary semantics match G4 (an answer runs to the next `##?` or end of body), so standalone FAQ is terminal content — place it last on the page. No new config, no new CMake sources; reuses G4's `extract_faq_pairs` helper via the new `process_standalone_faq` + `merge_faq_into_schema_extra` API in `src/content/schema_blocks.{hpp,cpp}`. Pairs with G3/G4 for Google AI Overviews, Perplexity, and ChatGPT citation of Q&A content.
+
 ## [0.7.0] - 2026-06-30
 
 ### Added

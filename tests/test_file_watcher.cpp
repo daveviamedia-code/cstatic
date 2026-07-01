@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "server/file_watcher.hpp"
+#include "test_util.hpp"
 
 namespace fs = std::filesystem;
 using cstatic::FileWatcher;
@@ -24,8 +25,7 @@ struct WatchFixture {
 
     WatchFixture() {
         saved_cwd = fs::current_path().string();
-        root_dir = (fs::temp_directory_path() /
-                    ("cstatic_fw_" + std::to_string(std::rand()))).string();
+        root_dir = cstatic_test::unique_temp_dir("cstatic_fw_");
         fs::create_directories(root_dir);
         fs::current_path(root_dir);
     }

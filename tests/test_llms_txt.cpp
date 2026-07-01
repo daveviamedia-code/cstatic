@@ -6,6 +6,7 @@
 #include "config/config.hpp"
 #include "modules/llms_txt.hpp"
 #include "utils/file_io.hpp"
+#include "test_util.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -19,7 +20,7 @@ namespace {
 // RAII temp dir for llms.txt output.
 struct LlmsDir {
     fs::path dir;
-    LlmsDir() : dir(fs::temp_directory_path() / "cstatic_llms_test") {
+    LlmsDir() : dir(cstatic_test::unique_temp_dir("cstatic_llms_")) {
         fs::remove_all(dir);
         fs::create_directories(dir);
     }

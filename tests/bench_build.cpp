@@ -10,6 +10,7 @@
 #include "content/markdown.hpp"
 #include "assets/asset_pipeline.hpp"
 #include "utils/file_io.hpp"
+#include "test_util.hpp"
 
 namespace fs = std::filesystem;
 
@@ -22,7 +23,7 @@ struct BenchFixture {
     BenchFixture() {
         saved_cwd = fs::current_path().string();
 
-        root_dir = (fs::temp_directory_path() / ("cstatic_bench_" + std::to_string(std::rand()))).string();
+        root_dir = cstatic_test::unique_temp_dir("cstatic_bench_");
         fs::create_directories(root_dir);
         fs::create_directories(root_dir + "/src");
         fs::create_directories(root_dir + "/templates");

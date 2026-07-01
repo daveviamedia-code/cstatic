@@ -13,6 +13,7 @@
 #include <httplib.h>
 
 #include "pipeline/link_checker.hpp"
+#include "test_util.hpp"
 
 namespace fs = std::filesystem;
 using cstatic::pipeline::check_links;
@@ -29,8 +30,7 @@ struct LinkFixture {
 
     LinkFixture() {
         saved_cwd = fs::current_path().string();
-        root_dir = (fs::temp_directory_path() /
-                    ("cstatic_lc_" + std::to_string(std::rand()))).string();
+        root_dir = cstatic_test::unique_temp_dir("cstatic_lc_");
         fs::create_directories(root_dir);
         fs::current_path(root_dir);
     }

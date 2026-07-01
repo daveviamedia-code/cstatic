@@ -9,6 +9,7 @@
 #include "pipeline/builder.hpp"
 #include "modules/og_images.hpp"
 #include "utils/file_io.hpp"
+#include "test_util.hpp"
 
 namespace fs = std::filesystem;
 
@@ -23,7 +24,7 @@ struct BuildFixture {
         saved_cwd = fs::current_path().string();
 
         // Create temp directory
-        root_dir = (fs::temp_directory_path() / ("cstatic_test_" + std::to_string(std::rand()))).string();
+        root_dir = cstatic_test::unique_temp_dir("cstatic_test_");
         fs::create_directories(root_dir);
         fs::create_directories(root_dir + "/src");
         fs::create_directories(root_dir + "/templates");

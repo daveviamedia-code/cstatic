@@ -6,6 +6,7 @@
 #include "config/config.hpp"
 #include "modules/robots.hpp"
 #include "utils/file_io.hpp"
+#include "test_util.hpp"
 
 namespace fs = std::filesystem;
 using cstatic::Config;
@@ -40,7 +41,7 @@ static Config base_config() {
 // RAII temp dir for robots output.
 struct RobotsDir {
     fs::path dir;
-    RobotsDir() : dir(fs::temp_directory_path() / "cstatic_robots_test") {
+    RobotsDir() : dir(cstatic_test::unique_temp_dir("cstatic_robots_")) {
         fs::remove_all(dir);
         fs::create_directories(dir);
     }

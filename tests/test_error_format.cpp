@@ -5,6 +5,7 @@
 
 #include "cli/error_format.hpp"
 #include "pipeline/builder.hpp"
+#include "test_util.hpp"
 
 namespace fs = std::filesystem;
 
@@ -20,7 +21,7 @@ struct TempProject {
     std::string src_file;
 
     TempProject() {
-        root = (fs::temp_directory_path() / ("cstatic_efmt_" + std::to_string(std::rand()))).string();
+        root = cstatic_test::unique_temp_dir("cstatic_efmt_");
         fs::create_directories(root + "/templates");
         template_dir = root + "/templates";
     }

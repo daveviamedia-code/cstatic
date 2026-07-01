@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Test-suite temp-directory isolation — fixtures across 9 test files named their temp dirs with unseeded `std::rand()` (or hard-coded names), so every test process produced the same path and parallel `ctest` runs collided on a shared `/tmp` dir. This was the root cause of the intermittent Ubuntu CI failures (a different integration test — `publish_future`, `markdown pagination`, etc. — flaking each run). A new shared `tests/test_util.hpp` provides `unique_temp_dir(prefix)` (nanosecond timestamp + atomic counter); all fixtures now use it. Test-only change — no binary impact.
+
 ## [0.8.3] - 2026-07-01
 
 ### Fixed

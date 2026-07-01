@@ -75,17 +75,20 @@ TEST_CASE("FileWatcher invokes callback on file modification", "[file_watcher]")
     // Run watcher on its own thread — start() blocks.
     std::thread t([&]() { watcher.start(); });
 
-    // Give the kernel a moment to register the watch handle.
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    // The kernel watch handle takes a moment to register, and on a loaded
+    // CI runner the watcher thread may not be scheduled for several hundred
+    // milliseconds. A single probe write can race ahead of the watch being
+    // armed and its event be lost. Keep creating new files — each one
+    // re-triggers the directory-level event once the watch is armed — until
+    // the callback fires or the deadline elapses.
+    auto deadline = std::chrono::steady_clock::now() +
+                    std::chrono::milliseconds(3000);
+    for (int n = 0; std::chrono::steady_clock::now() < deadline && !fired.load(); ++n) {
+        fx.write("probe-" + std::to_string(n) + ".txt", "hello\n");
+        WatchFixture::wait_for(fired, 100);
+    }
 
-    // Creating a new file in the watched directory reliably triggers the
-    // directory-level event on all platforms (kqueue NOTE_WRITE on macOS,
-    // IN_CREATE on Linux, FILE_NOTIFY_CHANGE_FILE_NAME on Windows).
-    // Editing an existing file's contents is less reliable on macOS kqueue.
-    fx.write("new-file.txt", "hello\n");
-
-    // Wait for callback to fire.
-    REQUIRE(WatchFixture::wait_for(fired));
+    REQUIRE(fired.load());
 
     watcher.stop();
     t.join();

@@ -12,15 +12,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # macOS + Ubuntu (normal Release build and full-static).
-          # Windows (Catch2 test-discovery runtime) is still deferred.
+          # macOS + Ubuntu. Windows (Catch2 test-discovery runtime) deferred.
           - os: macos-latest
             compiler: clang
           - os: ubuntu-latest
             compiler: gcc
-          - os: ubuntu-latest
-            compiler: gcc
-            cmake_extra: "-DCSTATIC_STATIC=ON"
 
     runs-on: ${{ matrix.os }}
 

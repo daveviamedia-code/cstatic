@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-07-01
+
+### Fixed
+- File-watcher test reliability on Linux CI — the callback-on-modification test case created a single probe file after a fixed 200ms sleep, which raced ahead of the inotify watch being armed on loaded single-vCPU runners and lost the `IN_CREATE` event. It now creates probe files in a bounded retry loop (up to the 3s deadline) so the test is robust to watcher-thread scheduling delay. Fixes the only failing Ubuntu test in CI.
+
+### Changed
+- Release pipeline no longer ships a fully-static Linux binary — the `release.yml` Ubuntu build drops `-DCSTATIC_STATIC=ON` and uses the default `-static-libgcc -static-libstdc++`, which links cleanly on the runner. The previous full `-static` failed (`ld: attempted static link of dynamic object 'libz.so'`) because the runner lacks `libz.a`. Full-static also broke DNS at runtime, and the Cloudflare deploy runs `cstatic build` locally, so the mostly-static binary is correct for the deploy use case.
+- Windows release build is now non-blocking (`continue-on-error: ${{ matrix.experimental }}`). The Windows build is known-deferred (Catch2 test-discovery runtime), and previously its failure caused the `release` job (gated `needs: build`) to skip on every tag — so no binaries were ever published, even for the working Linux + macOS jobs. Linux and macOS releases now publish regardless of the Windows leg. `build.yml` likewise drops its now-redundant full-static Ubuntu job (the shipped Linux binary is no longer full-static).
+
 ## [0.8.1] - 2026-07-01
 
 ### Fixed

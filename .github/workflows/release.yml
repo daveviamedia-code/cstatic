@@ -15,13 +15,15 @@ jobs:
             cmake_extra: ""
             artifact: cstatic-macos-arm64
           - os: ubuntu-latest
-            cmake_extra: "-DCSTATIC_STATIC=ON"
+            cmake_extra: ""
             artifact: cstatic-linux-x86_64
           - os: windows-latest
             cmake_extra: "-DCSTATIC_STATIC=ON"
             artifact: cstatic-windows-x86_64.exe
+            experimental: true
 
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.experimental == true }}
 
     steps:
       - uses: actions/checkout@v4
@@ -79,6 +81,6 @@ jobs:
 
             **Binaries:**
             - `cstatic-macos-arm64` — macOS (Apple Silicon)
-            - `cstatic-linux-x86_64` — Linux (x86_64, fully static)
-            - `cstatic-windows-x86_64.exe` — Windows (x86_64)
+            - `cstatic-linux-x86_64` — Linux (x86_64)
+            - `cstatic-windows-x86_64.exe` — Windows (x86_64, experimental — may be missing if the Windows build is deferred)
           files: artifacts/**/*

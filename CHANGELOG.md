@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.3] - 2026-07-01
+
 ### Fixed
 - CI test-suite reliability — `build.yml` now runs `ctest -E FileWatcher` on push. The FileWatcher cases need reliable kernel event delivery (kqueue/inotify) that is unreliable under ctest parallelism on shared runners, and their I/O load also perturbed the timing-sensitive `publish_future` integration test (which flaked on macOS once the FileWatcher test grew heavier). They remain covered by local runs. This reverts the v0.8.2 retry-loop change — the Ubuntu CI failure was not a watch-arm race but absent inotify delivery on the runner.
 

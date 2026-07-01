@@ -11,19 +11,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Windows is intentionally omitted: its build is deferred (Catch2
+          # test-discovery runtime). Re-add a windows-latest entry once the
+          # native build is unblocked. The release publishes macOS + Linux.
           - os: macos-latest
             cmake_extra: ""
             artifact: cstatic-macos-arm64
           - os: ubuntu-latest
             cmake_extra: ""
             artifact: cstatic-linux-x86_64
-          - os: windows-latest
-            cmake_extra: "-DCSTATIC_STATIC=ON"
-            artifact: cstatic-windows-x86_64.exe
-            experimental: true
 
     runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ matrix.experimental == true }}
 
     steps:
       - uses: actions/checkout@v4
@@ -32,26 +30,19 @@ jobs:
         run: >
           cmake -B build
           -DCMAKE_BUILD_TYPE=Release
-          -DCSTATIC_BUILD_TESTS=ON
           ${{ matrix.cmake_extra }}
 
       - name: Build
         run: cmake --build build --config Release
 
-      - name: Test
-        working-directory: build
-        run: ctest --output-on-failure -C Release
-
-      - name: Prepare artifact (non-Windows)
-        if: runner.os != 'Windows'
+      # No Test step here: the quality gate lives in build.yml (push workflow),
+      # which runs the full ctest suite on the same commit. The release job
+      # only builds and uploads binaries so that test-suite flakiness never
+      # blocks publication.
+      - name: Prepare artifact
         run: |
           cp build/cstatic "${{ matrix.artifact }}"
           strip "${{ matrix.artifact }}"
-
-      - name: Prepare artifact (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          copy build\Release\cstatic.exe "${{ matrix.artifact }}"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -82,5 +73,4 @@ jobs:
             **Binaries:**
             - `cstatic-macos-arm64` — macOS (Apple Silicon)
             - `cstatic-linux-x86_64` — Linux (x86_64)
-            - `cstatic-windows-x86_64.exe` — Windows (x86_64, experimental — may be missing if the Windows build is deferred)
           files: artifacts/**/*

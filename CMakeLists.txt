@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(cstatic VERSION 0.8.0 LANGUAGES CXX)
+project(cstatic VERSION 0.8.1 LANGUAGES CXX)
 
 # Policy override for dependency compatibility (yaml-cpp requires older CMake minimum)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE INTERNAL "")
@@ -128,8 +128,8 @@ target_link_libraries(cstatic PRIVATE
     CLI11::CLI11
     tomlplusplus::tomlplusplus
     yaml-cpp::yaml-cpp
-    libcmark-gfm_static
     libcmark-gfm-extensions_static
+    libcmark-gfm_static
     inja                 # inja creates target 'inja' (alias: pantor::inja)
     nlohmann_json        # provided by inja's embedded copy
     xxHash::xxhash

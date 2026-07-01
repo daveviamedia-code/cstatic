@@ -76,8 +76,8 @@ target_link_libraries(cstatic_tests PRIVATE
     CLI11::CLI11
     tomlplusplus::tomlplusplus
     yaml-cpp::yaml-cpp
-    libcmark-gfm_static
     libcmark-gfm-extensions_static
+    libcmark-gfm_static
     inja
     nlohmann_json
     xxHash::xxhash

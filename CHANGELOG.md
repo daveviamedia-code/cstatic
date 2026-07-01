@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-07-01
+
+### Fixed
+- Linux compilation — `libcmark-gfm-extensions_static` is now listed before `libcmark-gfm_static` at all three `target_link_libraries` sites. GNU `ld` resolves static archives strictly left-to-right, so the previous order (core before extensions) left `table.c`'s references to core symbols (`cmark_arena_push`/`cmark_arena_pop`) undefined on Ubuntu. Darwin resolves regardless of order, so macOS was unaffected. Also added the missing `#include <vector>` in `src/content/shortcodes.cpp` (it relied on a transitive include from `<filesystem>`/`<inja/inja.hpp>`, the fragile macOS-only pattern previously swept out of the rest of the tree). CI (`build.yml`) now runs Ubuntu (normal Release) and a full-static `-DCSTATIC_STATIC=ON` job alongside macOS, mirroring the `release.yml` matrix so the Cloudflare-deploy Linux binary links on every push.
+
 ## [0.8.0] - 2026-06-30
 
 ### Added

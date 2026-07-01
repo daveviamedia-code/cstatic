@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <vector>
 #include <regex>
 #include <cctype>
 #include <iostream>

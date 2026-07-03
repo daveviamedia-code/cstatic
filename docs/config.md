@@ -665,12 +665,47 @@ org_same_as = ["https://twitter.com/acme", "https://github.com/acme"]
 website_search_url_template = "/search?q={search_term_string}"
 ```
 
+### Authors Options
+
+When `authors.enabled = true`, C-Static loads `.md` files from `authors.dir` (default `src/authors`) into an author index. Each file's stem is the **slug** referenced by page frontmatter `author: <slug>`. The filename `src/authors/jane-doe.md` → slug `jane-doe`.
+
+Pages that set `author: jane-doe` get:
+- `{{ page.author }}` in templates — a full author object (`name`, `title`, `bio`, `avatar`, `email`, `twitter`, `linkedin`, `github`, `website`, `same_as`, `expertise`, `url`).
+- A resolved Schema.org `Person` JSON-LD object on the page (when `seo.json_ld_enabled = true`).
+
+Each loaded author also gets a generated profile page at `/<authors_dir_basename>/<slug>/` (e.g. `/authors/jane-doe/`), rendered with `templates/author.html`. The template receives `{{ author }}` (the author object plus a `posts` array of their published pages) and `{{ page }}` with `type = "ProfilePage"`. The full roster is available to every template as `{{ site.authors }}` (a `{slug: object}` map).
+
+Author frontmatter fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Display name (falls back to the filename stem if omitted) |
+| `title` | string | Job title / role → `jobTitle` in Person schema |
+| `bio` | string | Short biography |
+| `avatar` | string | Avatar image URL → `image` in Person schema |
+| `email` | string | Email → `email` in Person schema |
+| `twitter` / `linkedin` / `github` | string | Social profiles (available in templates) |
+| `website` | string | Primary URL → `@id` in Person schema |
+| `same_as` | string[] | Additional profile URLs → `sameAs` array |
+| `expertise` | string[] | Topics (available in templates) |
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `authors.enabled` | bool | `false` | Enable the author entity system (opt-in) |
+| `authors.dir` | string | `"src/authors"` | Directory containing author `.md` files |
+
+```toml
+[authors]
+enabled = true
+dir = "src/authors"
+```
+
 **Per-page frontmatter** (lives in `custom`, available as `page.*` in templates):
 
 | Field | Used by | Description |
 |-------|---------|-------------|
 | `type` | all | Schema `@type` override (e.g. `"Product"`, `"SoftwareApplication"`). |
-| `author` | articles | String name → emitted as `{@type:Person, name}`. |
+| `author` | articles | String slug or name. When `authors.enabled = true` and the slug matches an author file, resolves to a full `Person` schema (see [Authors Options](#authors-options)). Otherwise emitted as `{@type:Person, name}`. |
 | `schema` | all | Object deep-merged over the auto-generated schema. Use `schema["@type"]` to override the type itself. |
 | `schema_extra` | all | Array (or single object) emitted verbatim as additional `<script>` blocks. |
 | `keywords` | all | Array or comma string; falls back to comma-joined `tags` for articles. |

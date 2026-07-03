@@ -1,6 +1,7 @@
 #include "pipeline/builder.hpp"
 #include "assets/asset_pipeline.hpp"
 #include "config/config.hpp"
+#include "content/authors_index.hpp"
 #include "content/frontmatter.hpp"
 #include "content/link_graph.hpp"
 #include "content/markdown.hpp"
@@ -452,6 +453,22 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
 
     // Source markdown files
     auto md_files = collect_files(cfg.source_dir, ".md");
+    // Author entity files (G6) are NOT content pages — they're loaded into
+    // the AuthorsIndex and rendered as profile pages separately. Excluding
+    // them here prevents a URL collision with the generated
+    // /<authors_dir>/<slug>/ pages.
+    if (cfg.authors_enabled && !cfg.authors_dir.empty()) {
+        fs::path authors_path(cfg.authors_dir);
+        md_files.erase(std::remove_if(md_files.begin(), md_files.end(),
+            [&authors_path](const std::string& f) {
+                try {
+                    std::string s = fs::relative(f, authors_path).string();
+                    return !s.empty() && s.compare(0, 2, "..") != 0;
+                } catch (...) {
+                    return false;
+                }
+            }), md_files.end());
+    }
     for (const auto& f : md_files) {
         hashes.hash_file(f);
     }
@@ -496,6 +513,30 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
     site_ctx["language"] = cfg.site_language;
     site_ctx["twitter_handle"] = cfg.site_twitter_handle;
     site_ctx["env"] = cfg.env;
+
+    // --- Load authors index (G6) ---
+    // When enabled, src/authors/*.md become first-class entities resolvable
+    // from page frontmatter `author: <slug>`. The index is built once here
+    // (single-threaded) and read-only in the multi-threaded render loop.
+    AuthorsIndex authors_index;
+    // URL path prefix for author profile pages, derived from authors_dir's
+    // basename (e.g. "src/authors" -> "/authors/").
+    std::string authors_url_base;
+    if (cfg.authors_enabled) {
+        authors_index.load(cfg.authors_dir);
+        std::string dir_base = fs::path(cfg.authors_dir).filename().string();
+        if (dir_base.empty()) dir_base = "authors";
+        authors_url_base = "/" + dir_base + "/";
+        // Expose the full author roster to every template via {{ site.authors }}.
+        if (!authors_index.empty()) {
+            nlohmann::json authors_map = nlohmann::json::object();
+            for (const auto& slug : authors_index.all_slugs()) {
+                authors_map[slug] = authors_index.context(slug);
+                authors_map[slug]["url"] = cfg.site_base_url + authors_url_base + slug + "/";
+            }
+            site_ctx["authors"] = authors_map;
+        }
+    }
 
     // Markdown rendering options (syntax highlighting + GFM extensions).
     MarkdownOptions md_opts;
@@ -675,6 +716,15 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
     // template changes — see needs_rebuild check in Phase 2).
     if (cfg.wikilinks_enabled) {
         hashes.hash_string("meta:wikilinks_index", link_graph.serialize_index());
+    }
+    // Authors index — any author file edit (name, bio, added/removed) must
+    // invalidate every page so {{ page.author }} and Person schemas refresh.
+    if (cfg.authors_enabled) {
+        nlohmann::json ah = nlohmann::json::array();
+        for (const auto& slug : authors_index.all_slugs()) {
+            ah.push_back(slug + ":" + authors_index.context(slug).dump());
+        }
+        hashes.hash_string("meta:authors_index", ah.dump());
     }
 
     // --- Phase 1b: Shortcodes, wikilinks, markdown render ---
@@ -1100,6 +1150,106 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         }
     }
 
+    // --- Phase 1.8: Generate author profile pages (G6) ---
+    // One page per loaded author at /<authors_dir_basename>/<slug>/, rendered
+    // with the "author" template. The page carries a Person JSON-LD schema
+    // (via schema_extra) so AI engines can attribute authorship.
+    if (cfg.authors_enabled && !authors_index.empty()) {
+        std::string author_tpl = (fs::path(cfg.template_dir) / "author.html").string();
+        if (!fs::exists(author_tpl)) {
+            std::cerr << utils::warning_label()
+                      << "authors.enabled is on but templates/author.html is missing — "
+                         "skipping author profile page generation\n";
+        } else {
+            // Group published pages by author slug (one pass over raw_pages).
+            std::map<std::string, nlohmann::json> posts_by_author;
+            for (const auto& rp : raw_pages) {
+                const auto& custom = rp.parsed.frontmatter.custom;
+                if (!custom.contains("author") || !custom["author"].is_string()) continue;
+                std::string a_slug = custom["author"].get<std::string>();
+                if (!authors_index.has(a_slug)) continue;
+
+                nlohmann::json pm;
+                pm["title"]   = rp.parsed.frontmatter.title;
+                pm["url"]     = rp.url;
+                pm["date"]    = rp.parsed.frontmatter.date;
+                pm["excerpt"] = utils::truncate_text(utils::strip_html_tags(rp.html_content), 200);
+                nlohmann::json tags_json = nlohmann::json::array();
+                for (const auto& tag : rp.parsed.frontmatter.tags) tags_json.push_back(tag);
+                pm["tags"] = tags_json;
+                posts_by_author[a_slug].push_back(pm);
+            }
+
+            renderer.preload_template("author");
+            std::string author_source_prefix = cfg.authors_dir + "/";
+            for (const auto& slug : authors_index.all_slugs()) {
+                std::string author_url = authors_url_base + slug + "/";
+                std::string author_full_url = cfg.site_base_url + author_url;
+                std::string output_path = utils::url_to_output(author_url, cfg.output_dir);
+
+                nlohmann::json author_ctx = authors_index.context(slug);
+                author_ctx["url"] = author_full_url;
+                auto pit = posts_by_author.find(slug);
+                author_ctx["posts"] = (pit != posts_by_author.end())
+                    ? pit->second : nlohmann::json::array();
+
+                std::string author_name = author_ctx.value("name", slug);
+                std::string author_bio  = author_ctx.value("bio", "");
+
+                nlohmann::json ctx;
+                ctx["site"]   = site_ctx;
+                ctx["pages"]  = pages_array;
+                ctx["author"] = author_ctx;
+                ctx["page"] = nlohmann::json::object();
+                ctx["page"]["url"]   = author_url;
+                ctx["page"]["title"] = author_name;
+                ctx["page"]["type"]  = "ProfilePage";
+
+                std::string seo_meta = build_seo_meta(
+                    author_name, author_url, author_bio, "", "", "",
+                    cfg.site_base_url, cfg.site_twitter_handle);
+                if (cfg.json_ld_enabled) {
+                    nlohmann::json schema_page;
+                    schema_page["title"]       = author_name;
+                    schema_page["url"]         = author_url;
+                    schema_page["description"] = author_bio;
+                    schema_page["type"]        = "ProfilePage";
+                    // Person schema via schema_extra — emitted verbatim by G3.
+                    nlohmann::json person = authors_index.person_schema(slug, author_full_url);
+                    schema_page["schema_extra"] = nlohmann::json::array({ person });
+                    seo_meta += modules::seo_schema::build_json_ld(cfg, schema_page, pages_array);
+                }
+                ctx["seo_meta"] = seo_meta;
+
+                std::string html;
+                std::string source_label = author_source_prefix + slug + ".md";
+                try {
+                    html = renderer.render("author", ctx, source_label);
+                } catch (const RenderError& e) {
+                    result.errors.push_back({BuildError::Type::Template, e.source_file(),
+                                             e.template_name(), e.line(), 0, e.what()});
+                    continue;
+                } catch (const std::runtime_error& e) {
+                    result.errors.push_back({BuildError::Type::Generic, source_label,
+                                             "author", 0, 0, e.what()});
+                    continue;
+                }
+
+                CachedOutput out;
+                out.output_path = output_path;
+                out.html = html;
+                all_outputs.push_back(std::move(out));
+
+                PageRecord rec;
+                rec.output_path = output_path;
+                rec.url = author_url;
+                all_records.push_back(std::move(rec));
+
+                result.pages_built++;
+            }
+        }
+    }
+
     // --- OG image URLs (computed before rendering so og:image lands in seo_meta) ---
     // The image files themselves are written later (after the output-write section)
     // so the full-rebuild wipe doesn't delete them.
@@ -1151,6 +1301,9 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         if (cfg.wikilinks_enabled) {
             deps.push_back("meta:wikilinks_index");
         }
+        if (cfg.authors_enabled) {
+            deps.push_back("meta:authors_index");
+        }
 
         bool needs_rebuild = true;
         if (incremental) {
@@ -1166,6 +1319,12 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
             // consistent with how shortcode template changes are handled.
             if (!needs_rebuild && cfg.wikilinks_enabled &&
                 !hashes.is_unchanged_key("meta:wikilinks_index")) {
+                needs_rebuild = true;
+            }
+            // Same coarse-grained invalidation for author resolution: an
+            // author-file edit must refresh every page's Person schema.
+            if (!needs_rebuild && cfg.authors_enabled &&
+                !hashes.is_unchanged_key("meta:authors_index")) {
                 needs_rebuild = true;
             }
         }
@@ -1248,6 +1407,27 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
                 ctx["page"]["draft"] = true;
             }
 
+            // Resolve author slug -> full author object (G6). Templates see
+            // {{ page.author.name }} etc.; the slug is also remembered so the
+            // JSON-LD schema below can emit a Person object.
+            std::string author_slug_resolved;
+            if (cfg.authors_enabled && !authors_index.empty() &&
+                ctx["page"].contains("author") && ctx["page"]["author"].is_string()) {
+                const std::string& slug = ctx["page"]["author"].get<std::string>();
+                if (!slug.empty()) {
+                    if (authors_index.has(slug)) {
+                        nlohmann::json ac = authors_index.context(slug);
+                        ac["url"] = cfg.site_base_url + authors_url_base + slug + "/";
+                        ctx["page"]["author"] = std::move(ac);
+                        author_slug_resolved = slug;
+                    } else {
+                        std::cerr << utils::warning_label() << "author '" << slug
+                                  << "' in " << rp.source_path
+                                  << " not found in authors index\n";
+                    }
+                }
+            }
+
             ctx["site"] = site_ctx;
             ctx["pages"] = pages_array;
             ctx["data"] = all_data;
@@ -1284,6 +1464,14 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
                 schema_page["tags"]        = tags;
                 for (const auto& [k, v] : rp.parsed.frontmatter.custom.items()) {
                     schema_page[k] = v;
+                }
+                // Override the author slug string with a resolved Person
+                // schema object (G6) so JSON-LD carries full identity data.
+                if (!author_slug_resolved.empty()) {
+                    schema_page["author"] = authors_index.person_schema(
+                        author_slug_resolved,
+                        cfg.site_base_url + authors_url_base +
+                            author_slug_resolved + "/");
                 }
                 seo_meta += modules::seo_schema::build_json_ld(cfg, schema_page, pages_array);
             }
@@ -1339,6 +1527,9 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         deps.push_back("meta:pages_array");
         if (cfg.wikilinks_enabled) {
             deps.push_back("meta:wikilinks_index");
+        }
+        if (cfg.authors_enabled) {
+            deps.push_back("meta:authors_index");
         }
 
         if (tasks[i].needs_rebuild) {

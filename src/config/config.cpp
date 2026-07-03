@@ -305,6 +305,10 @@ Config load_config(const std::string& path, const std::string& env) {
     cfg.org_url           = optional_string(tbl, "seo.org_url", cfg.site_base_url);
     cfg.website_search_url_template = optional_string(tbl, "seo.website_search_url_template", "");
 
+    // --- [authors] ---
+    cfg.authors_enabled = optional_bool(tbl, "authors.enabled", cfg.authors_enabled);
+    cfg.authors_dir     = optional_string(tbl, "authors.dir", cfg.authors_dir);
+
     // --- [sitemap] ---
     cfg.sitemap_exclude = optional_string_array(tbl, "sitemap.exclude");
 
@@ -459,6 +463,9 @@ std::string config_to_json(const Config& cfg) {
     j["seo"]["org_same_as"]                   = cfg.org_same_as;
     j["seo"]["org_url"]                       = cfg.org_url;
     j["seo"]["website_search_url_template"]   = cfg.website_search_url_template;
+
+    j["authors"]["enabled"] = cfg.authors_enabled;
+    j["authors"]["dir"]     = cfg.authors_dir;
 
     j["sitemap"]["exclude"] = cfg.sitemap_exclude;
 

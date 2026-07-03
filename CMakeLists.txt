@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(cstatic VERSION 0.8.3 LANGUAGES CXX)
+project(cstatic VERSION 0.9.0 LANGUAGES CXX)
 
 # Policy override for dependency compatibility (yaml-cpp requires older CMake minimum)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE INTERNAL "")
@@ -91,6 +91,7 @@ add_executable(cstatic
     src/cli/content_generator.cpp
     src/cli/error_format.cpp
     src/config/config.cpp
+    src/content/authors_index.cpp
     src/content/frontmatter.cpp
     src/content/link_graph.cpp
     src/content/markdown.cpp

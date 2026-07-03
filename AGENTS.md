@@ -180,6 +180,8 @@ In every layout's `<head>`, add `{{ seo_meta }}` — it emits description, Open 
 
 **Standalone `##?` FAQ extraction** (no config flag). `##? question` headings **outside** any `{% schema %}` wrapper are also auto-processed: each renders the same `<section class="faq"><details><summary>…</summary>…</details>` visible HTML, populates a `{{ page.faq }}` array (`[{question, answer_html, answer_text}]`) for custom layouts, and merges a `FAQPage` into `schema_extra`. If the page also has a `{% schema "FAQPage" %}` block, the two are combined into ONE `FAQPage` whose `mainEntity` holds every question. Answer-boundary semantics match the schema block (an answer runs to the next `##?` or end of body), so standalone FAQ is terminal content — place it last on the page.
 
+**E-E-A-T author entities** (`authors.enabled = true`). Author `.md` files under `authors.dir` (default `src/authors`) become first-class entities. The filename stem is the slug; page frontmatter `author: <slug>` resolves to a full author object exposed as `{{ page.author }}` (name, title, bio, avatar, social links, expertise) and a Schema.org `Person` JSON-LD object. Each author gets a generated profile page at `/<authors_dir_basename>/<slug>/` rendered with `templates/author.html` (template receives `{{ author }}` with a `.posts` array). The full roster is available as `{{ site.authors }}`. Author files are **excluded** from the regular markdown page collection — they are entities, not content pages. Author frontmatter: `name`, `title`, `bio`, `avatar`, `email`, `twitter`, `linkedin`, `github`, `website`, `same_as[]`, `expertise[]`. See `docs/config.md` → Authors Options.
+
 ### 5.7 Add data-driven pages
 
 ```toml
@@ -233,6 +235,7 @@ Full reference: `docs/config.md`. Most-used keys:
 | `[modules]` | `sitemap`, `rss`, `json_feed`, `robots`, `llms_txt` | `T`/`F`/`F`/`F`/`F` | Plus `rss_title`/`rss_description`/`rss_item_count`, `json_feed_output`, `llms_txt_description`/`llms_txt_max_pages`/`llms_txt_exclude`, `robots_*` (incl. `robots_ai_crawlers_mode` ∈ `off`\|`allow`\|`disallow`\|`custom` + `robots_ai_crawlers_custom`). `llms_txt` writes `/llms.txt` + `/llms-full.txt`; summary falls back to `site.description`. |
 | `[og_images]` | `enabled`, `template`, `output_format`, `width`, `height`, `output_dir` | `F`/`og-default`/`png`/`1200`/`630`/`og` | PNG needs rsvg-convert/convert/inkscape. |
 | `[seo]` | `json_ld_enabled` + `org_*` + `website_search_url_template` | `F` / empty | JSON-LD structured data. `org_name` enables Organization schema; `website_search_url_template` adds WebSite SearchAction. |
+| `[authors]` | `enabled`, `dir` | `F`, `src/authors` | E-E-A-T author entities. Loads `<dir>/<slug>.md`; page `author: <slug>` resolves to `{{ page.author }}` + Person JSON-LD. Generates profile pages at `/<dir_base>/<slug>/`. |
 | `[sitemap]` | `exclude` | `[]` | URL paths to drop. |
 | `[data]` | `data_dir` | `_data` | |
 | `[[data_source]]` | `file`, `template`, `url_pattern`, `item_key`, `per_page`, `per_item` | — | Array of tables. |
@@ -260,7 +263,7 @@ Full reference: `docs/config.md`. Most-used keys:
 | `sitemap_changefreq` | — | e.g. `monthly`. |
 | `sitemap_priority` | — | e.g. `0.8`. |
 | `type` | — | Schema.org `@type` override (e.g. `"Product"`, `"Article"`). Read by JSON-LD when `seo.json_ld_enabled = true`. |
-| `author` | — | String name; articles emit it as `{@type:Person, name}`. |
+| `author` | — | String slug or name. When `authors.enabled = true` and the slug matches an author file, resolves to `{{ page.author }}` (full object) + `Person` JSON-LD. Otherwise emitted as `{@type:Person, name}`. |
 | `schema` | — | Object deep-merged over the auto-generated JSON-LD schema. Use `schema["@type"]` to override the type. |
 | `schema_extra` | — | Array (or object) emitted verbatim as extra JSON-LD `<script>` blocks. Auto-populated by `{% schema %}` blocks (FAQPage/HowTo/Review) and by standalone `##?` FAQ extraction. |
 | `keywords` | — | Array or comma string; articles fall back to comma-joined `tags`. |
@@ -271,8 +274,9 @@ Any extra field becomes `page.<field_name>` in templates. Commerce fields (`bran
 
 | Variable | Description |
 |----------|-------------|
-| `site` | Site config: `title`, `base_url`, `language`, `env` (current env name), `twitter_handle`. |
-| `page` | Current page: `title`, `url`, `content`, `date`, `tags`, `excerpt`, plus any extra frontmatter. Gains `backlinks` when wikilinks are on. Gains `faq` (`[{question, answer_html, answer_text}]`) when standalone `##?` questions are present. |
+| `site` | Site config: `title`, `base_url`, `language`, `env` (current env name), `twitter_handle`, and `authors` (map of slug→author object, when `authors.enabled = true`). |
+| `page` | Current page: `title`, `url`, `content`, `date`, `tags`, `excerpt`, plus any extra frontmatter. Gains `backlinks` when wikilinks are on. Gains `faq` (`[{question, answer_html, answer_text}]`) when standalone `##?` questions are present. `page.author` is a resolved object (name, title, bio, …) when `authors.enabled = true` and the slug matches a loaded author. |
+| `author` | On generated author profile pages (`/<authors_dir>/<slug>/`): the author object plus `.posts` (their published pages). `page.type` is `"ProfilePage"`. |
 | `pages` | All pages, sorted by date (newest first). Excludes drafts, future-scheduled, and alias redirect stubs. |
 | `data` | All loaded data files, keyed by filename stem. |
 | `item` | Current data item (data-driven pages with `per_item`). |

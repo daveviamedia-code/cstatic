@@ -113,7 +113,14 @@ C-Static can generate a sitemap, RSS feed, JSON Feed, robots.txt, and per-page s
 
    For commerce pages use `type = "Product"` (or `"SoftwareApplication"`) plus `brand`, `price`, `currency`, `availability`, `rating`, `reviewCount`, and (for apps) `application_category` / `operating_system`. Missing required fields surface as non-fatal `warn:` lines on stderr.
 
-8. **Build:** `cstatic build`.
+8. **(Optional, E-E-A-T) Enable author entities** so each byline resolves to a full person with a profile page. Create `src/authors/<slug>.md` files (stem = slug) with `name`, `title`, `bio`, `avatar`, `email`, `twitter`/`linkedin`/`github`, `website`, `same_as[]`, `expertise[]`. Then on any page set `author: <slug>` in frontmatter — it resolves to `{{ page.author }}` (full object) and a `Person` JSON-LD schema (when JSON-LD is also on). Each author gets a profile page at `/authors/<slug>/` rendered with `templates/author.html` (`{{ author.posts }}` lists their published pages).
+
+   ```toml
+   [authors]
+   enabled = true
+   ```
+
+9. **Build:** `cstatic build`.
 
 ## Gotchas
 
@@ -126,3 +133,5 @@ C-Static can generate a sitemap, RSS feed, JSON Feed, robots.txt, and per-page s
 - JSON-LD is **off by default** — existing builds are unchanged until you set `seo.json_ld_enabled = true`. The `BlogPosting` default is inferred only for URLs under `/posts/...`; use `type: Article` (etc.) in frontmatter to override.
 - JSON-LD `page.schema` deep-merges: auto-generated fields (`headline`, `datePublished`, `author`, `image`, `url`...) are preserved; only the keys you list are overridden. Use `schema_extra` (array) when you need entirely separate top-level schemas (FAQ, Event, etc.).
 - **FAQ authoring shortcut**: `##? question` headings anywhere in a page (no `{% schema %}` wrapper needed) auto-build a `FAQPage` — visible `<details>` HTML inline + a `FAQPage` JSON-LD merged into `schema_extra` + a `{{ page.faq }}` array. Wraps with `{% schema "FAQPage" %}` are still supported and merge into the same single `FAQPage`. Standalone FAQ is terminal (answers run to the next `##?` or end of body) — place it last on the page.
+- **Author files are entities, not pages**: when `authors.enabled = true`, `src/authors/*.md` are loaded into the author index and **excluded** from the regular markdown page collection. Don't expect them to appear in `{{ pages }}` or render with the default template — they render via `templates/author.html` at `/<slug>/`.
+- **`json_ld_enabled` is under `[seo]`, not `[modules]`**: the scaffold's commented hint sits under `[modules]` but the real key is `seo.json_ld_enabled`. The `[authors]` table is separate and gates only the author entity system (resolution + profile pages), independent of JSON-LD.

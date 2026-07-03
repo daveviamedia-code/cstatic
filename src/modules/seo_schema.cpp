@@ -172,12 +172,20 @@ nlohmann::json build_article_schema(const Config& cfg, const nlohmann::json& pag
         j["dateModified"] = date;
     }
 
-    std::string author = page.value("author", "");
-    if (!author.empty()) {
-        nlohmann::json a;
-        a["@type"] = "Person";
-        a["name"] = author;
-        j["author"] = a;
+    if (page.contains("author")) {
+        const auto& av = page["author"];
+        if (av.is_string()) {
+            std::string author = av.get<std::string>();
+            if (!author.empty()) {
+                nlohmann::json a;
+                a["@type"] = "Person";
+                a["name"] = author;
+                j["author"] = a;
+            }
+        } else if (av.is_object()) {
+            // Already a resolved Person schema (from the authors index, G6).
+            j["author"] = av;
+        }
     }
 
     std::string image = page.value("image", "");

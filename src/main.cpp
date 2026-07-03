@@ -167,6 +167,7 @@ int cmd_init(const std::string& name) {
     // Create directories
     fs::create_directories("src");
     fs::create_directories("src/posts");
+    fs::create_directories("src/authors");
     fs::create_directories("templates");
     fs::create_directories("templates/partials");
     fs::create_directories("static/css");
@@ -212,6 +213,7 @@ robots = false
 # robots_ai_crawlers_mode = "allow"   # or "disallow" / "custom"
 # llms_txt = false  # emit /llms.txt + /llms-full.txt for LLM crawlers
 # json_ld_enabled = false  # emit Schema.org JSON-LD structured data
+# authors_enabled = false  # E-E-A-T: load src/authors/*.md, resolve `author: <slug>`
 
 [[collection]]
 name = "posts"
@@ -383,6 +385,43 @@ Welcome to your blog! This is your first post. Edit or delete it, then run `csta
 </html>
 )";
 
+    // templates/author.html — profile page for each loaded author (G6).
+    // Rendered with context: {{ author }} (name, title, bio, avatar, posts, ...).
+    const char* author_html = R"(<!DOCTYPE html>
+<html lang="{{ site.language }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ page.title }} — {{ site.title }}</title>
+  {{ seo_meta }}
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <nav>
+    <a href="/">{{ site.title }}</a>
+  </nav>
+  <main>
+    <header class="author-header">
+      <h1>{{ author.name }}</h1>
+      {% if author.title %}<p class="author-title">{{ author.title }}</p>{% endif %}
+      {% if author.bio %}<p class="author-bio">{{ author.bio }}</p>{% endif %}
+    </header>
+    <section>
+      <h2>Posts by {{ author.name }}</h2>
+      <ul>
+      {% for p in author.posts %}
+        <li><a href="{{ p.url }}">{{ p.title }}</a> — <time>{{ p.date }}</time></li>
+      {% endfor %}
+      </ul>
+    </section>
+  </main>
+  <footer>
+    <p>Built with <a href="https://github.com/daveviamedia-code/cstatic">C-Static</a></p>
+  </footer>
+</body>
+</html>
+)";
+
     // templates/tag.html
     const char* tag_html = R"(<!DOCTYPE html>
 <html lang="{{ site.language }}">
@@ -507,6 +546,42 @@ draft: true
 # {{ title }}
 )";
 
+    // archetypes/author.md — used with `cstatic new --kind author authors/x.md`.
+    // Filename stem becomes the author slug referenced by `author: <slug>`.
+    const char* archetype_author_md = R"(---
+name: "{{ title }}"
+title: ""
+bio: ""
+avatar: ""
+email: ""
+twitter: ""
+github: ""
+website: ""
+same_as: []
+expertise: []
+---
+
+Write the author's bio here.
+)";
+
+    // src/authors/jane-doe.md — sample author (G6). Referenced from the
+    // scaffold's first post via `author: jane-doe` once authors.enabled is on.
+    const char* author_jane_doe_md = R"(---
+name: "Jane Doe"
+title: "Founder"
+bio: "Jane writes about static sites and the open web."
+github: "janedoe"
+website: "https://example.com"
+same_as:
+  - "https://github.com/janedoe"
+expertise:
+  - "static-site-generators"
+  - "C++"
+---
+
+Jane Doe is the founding author of this site.
+)";
+
     // .github/workflows/deploy.yml — push-to-deploy to Cloudflare Workers.
     // Downloads the cstatic release binary (no C++ toolchain needed in CI),
     // builds the site, and uploads output/ as a Worker's static assets.
@@ -582,6 +657,7 @@ Thumbs.db
         {"templates/default.html",   default_html},
         {"templates/post.html",      post_html},
         {"templates/posts-index.html", posts_index_html},
+        {"templates/author.html",    author_html},
         {"templates/tag.html",       tag_html},
         {"templates/tags.html",      tags_html},
         {"templates/partials/nav.html", nav_html},
@@ -591,6 +667,8 @@ Thumbs.db
         {"shortcodes/note.html",     shortcode_note_html},
         {"archetypes/default.md",    archetype_default_md},
         {"archetypes/post.md",       archetype_post_md},
+        {"archetypes/author.md",     archetype_author_md},
+        {"src/authors/jane-doe.md",  author_jane_doe_md},
         {"static/css/style.css",     style_css},
         {"static/js/app.js",         app_js},
         {".github/workflows/deploy.yml", deploy_yml},

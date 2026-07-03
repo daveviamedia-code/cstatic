@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-07-03
+
+### Added
+- E-E-A-T author entity system (G6). When `authors.enabled = true`, `.md` files under `authors.dir` (default `src/authors`) are loaded into an author index. Page frontmatter `author: <slug>` resolves to a full author object exposed to templates as `{{ page.author }}` (name, title, bio, avatar, social links, expertise) and emits a Schema.org `Person` JSON-LD object on the page. Each author gets a generated profile page at `/<authors_dir>/<slug>/` (rendered with `templates/author.html`) listing their published posts with a `Person` schema. Author files support `name`, `title`, `bio`, `avatar`, `email`, `twitter`, `linkedin`, `github`, `website`, `same_as` (array), and `expertise` (array). The full roster is available to every template as `{{ site.authors }}`. Opt-in and backwards-compatible — existing builds are unaffected unless the flag is set.
+
 ### Fixed
 - Test-suite temp-directory isolation — fixtures across 9 test files named their temp dirs with unseeded `std::rand()` (or hard-coded names), so every test process produced the same path and parallel `ctest` runs collided on a shared `/tmp` dir. This was the root cause of the intermittent Ubuntu CI failures (a different integration test — `publish_future`, `markdown pagination`, etc. — flaking each run). A new shared `tests/test_util.hpp` provides `unique_temp_dir(prefix)` (nanosecond timestamp + atomic counter); all fixtures now use it. Test-only change — no binary impact.
 

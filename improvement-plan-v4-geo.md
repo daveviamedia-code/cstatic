@@ -272,7 +272,7 @@ bool        authors_enabled = false;
 
 ---
 
-### G7. Citation Meta Tags
+### G7. Citation Meta Tags   DONE
 
 **Approach**: Emit Google Scholar / Perplexity / ChatGPT `citation_*` meta tags. Auto-derived from frontmatter.
 

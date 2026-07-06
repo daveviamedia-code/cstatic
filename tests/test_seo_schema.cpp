@@ -9,6 +9,7 @@
 #include "modules/seo_schema.hpp"
 
 using cstatic::Config;
+using cstatic::modules::seo_schema::build_citation_tags;
 using cstatic::modules::seo_schema::build_json_ld;
 using cstatic::modules::seo_schema::build_organization_script;
 using cstatic::modules::seo_schema::build_website_script;
@@ -352,4 +353,121 @@ TEST_CASE("seo_schema: validate SoftwareApplication requires applicationCategory
     auto issues = validate(s, "/a/");
     REQUIRE(issues.size() == 1);
     REQUIRE(issues[0].field == "applicationCategory");
+}
+
+// --- G7: Citation meta tags ---
+
+TEST_CASE("seo_schema: citation tags disabled returns empty", "[seo_schema]") {
+    Config cfg = base_config();
+    cfg.citation_tags_enabled = false;
+    auto page = make_page("Hello", "/posts/hello/", "2025-06-01");
+    REQUIRE(build_citation_tags(cfg, page).empty());
+}
+
+TEST_CASE("seo_schema: citation tags all present", "[seo_schema]") {
+    Config cfg = base_config();
+    cfg.citation_tags_enabled = true;
+
+    nlohmann::json page;
+    page["title"] = "Deep Learning";
+    page["url"]   = "/posts/dl/";
+    page["date"]  = "2025-06-01";
+    page["description"] = "An abstract.";
+    page["author"] = "Jane Doe";
+    page["pdf_url"] = "https://example.com/paper.pdf";
+    page["journal"] = "Journal of ML";
+    page["doi"]     = "10.1000/xyz123";
+    page["tags"]    = {"machine-learning", "neural-networks"};
+
+    std::string html = build_citation_tags(cfg, page);
+    REQUIRE(contains(html, "name=\"citation_title\" content=\"Deep Learning\""));
+    REQUIRE(contains(html, "name=\"citation_publication_date\" content=\"2025-06-01\""));
+    REQUIRE(contains(html, "name=\"citation_online_date\" content=\"2025-06-01\""));
+    REQUIRE(contains(html, "name=\"citation_author\" content=\"Jane Doe\""));
+    REQUIRE(contains(html, "name=\"citation_pdf_url\" content=\"https://example.com/paper.pdf\""));
+    REQUIRE(contains(html, "name=\"citation_abstract\" content=\"An abstract.\""));
+    REQUIRE(contains(html, "name=\"citation_journal_title\" content=\"Journal of ML\""));
+    REQUIRE(contains(html, "name=\"citation_doi\" content=\"10.1000/xyz123\""));
+    REQUIRE(contains(html, "name=\"citation_keywords\" content=\"machine-learning; neural-networks\""));
+}
+
+TEST_CASE("seo_schema: citation tags omit missing fields", "[seo_schema]") {
+    Config cfg = base_config();
+    cfg.citation_tags_enabled = true;
+
+    nlohmann::json page;
+    page["title"] = "Minimal";
+    page["url"]   = "/posts/minimal/";
+    // No date, author, pdf_url, journal, doi, or tags.
+
+    std::string html = build_citation_tags(cfg, page);
+    REQUIRE(contains(html, "name=\"citation_title\" content=\"Minimal\""));
+    REQUIRE(!contains(html, "citation_author"));
+    REQUIRE(!contains(html, "citation_publication_date"));
+    REQUIRE(!contains(html, "citation_online_date"));
+    REQUIRE(!contains(html, "citation_pdf_url"));
+    REQUIRE(!contains(html, "citation_abstract"));
+    REQUIRE(!contains(html, "citation_journal_title"));
+    REQUIRE(!contains(html, "citation_doi"));
+    REQUIRE(!contains(html, "citation_keywords"));
+}
+
+TEST_CASE("seo_schema: citation author as resolved Person object", "[seo_schema]") {
+    Config cfg = base_config();
+    cfg.citation_tags_enabled = true;
+
+    nlohmann::json page;
+    page["title"] = "Post";
+    page["url"]   = "/posts/post/";
+    page["date"]  = "2025-06-01";
+    nlohmann::json person;
+    person["@type"] = "Person";
+    person["name"]  = "John Smith";
+    page["author"]  = person;
+
+    std::string html = build_citation_tags(cfg, page);
+    REQUIRE(contains(html, "name=\"citation_author\" content=\"John Smith\""));
+}
+
+TEST_CASE("seo_schema: citation keywords semicolon-joined", "[seo_schema]") {
+    Config cfg = base_config();
+    cfg.citation_tags_enabled = true;
+
+    nlohmann::json page;
+    page["title"] = "T";
+    page["url"]   = "/posts/t/";
+    page["tags"]  = {"alpha", "beta", "gamma"};
+
+    std::string html = build_citation_tags(cfg, page);
+    REQUIRE(contains(html, "citation_keywords\" content=\"alpha; beta; gamma\""));
+}
+
+TEST_CASE("seo_schema: citation abstract prefers tldr", "[seo_schema]") {
+    Config cfg = base_config();
+    cfg.citation_tags_enabled = true;
+
+    nlohmann::json page;
+    page["title"] = "T";
+    page["url"]   = "/posts/t/";
+    page["description"] = "Long description.";
+    page["tldr"] = "Short summary.";
+
+    std::string html = build_citation_tags(cfg, page);
+    REQUIRE(contains(html, "citation_abstract\" content=\"Short summary.\""));
+    REQUIRE(!contains(html, "Long description."));
+}
+
+TEST_CASE("seo_schema: citation online date prefers created", "[seo_schema]") {
+    Config cfg = base_config();
+    cfg.citation_tags_enabled = true;
+
+    nlohmann::json page;
+    page["title"] = "T";
+    page["url"]   = "/posts/t/";
+    page["date"]  = "2025-06-01";
+    page["created"] = "2025-05-15";
+
+    std::string html = build_citation_tags(cfg, page);
+    REQUIRE(contains(html, "citation_online_date\" content=\"2025-05-15\""));
+    REQUIRE(contains(html, "citation_publication_date\" content=\"2025-06-01\""));
 }

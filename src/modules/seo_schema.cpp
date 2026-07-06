@@ -1,6 +1,7 @@
 #include "modules/seo_schema.hpp"
 #include "config/config.hpp"
 #include "utils/terminal.hpp"
+#include "utils/file_io.hpp"
 
 #include <nlohmann/json.hpp>
 #include <algorithm>
@@ -534,6 +535,74 @@ std::string build_json_ld(const Config& cfg, const nlohmann::json& page,
     }
 
     return out;
+}
+
+std::string build_citation_tags(const Config& cfg, const nlohmann::json& page) {
+    if (!cfg.citation_tags_enabled) return "";
+
+    std::ostringstream out;
+
+    auto emit = [&](const std::string& name, const std::string& content) {
+        if (!content.empty()) {
+            out << "<meta name=\"" << name << "\" content=\""
+                << utils::xml_escape(content) << "\">\n";
+        }
+    };
+
+    // citation_author — one per author.
+    // author may be a raw string slug, a resolved Person object (G6), or
+    // an entry in an `authors` array.
+    auto emit_author = [&](const nlohmann::json& a) {
+        if (a.is_string()) {
+            emit("citation_author", a.get<std::string>());
+        } else if (a.is_object() && a.contains("name") && a["name"].is_string()) {
+            emit("citation_author", a["name"].get<std::string>());
+        }
+    };
+
+    if (page.contains("author")) {
+        emit_author(page["author"]);
+    }
+    if (page.contains("authors") && page["authors"].is_array()) {
+        for (const auto& a : page["authors"]) {
+            emit_author(a);
+        }
+    }
+
+    emit("citation_title", page.value("title", ""));
+    emit("citation_publication_date", page.value("date", ""));
+
+    // citation_online_date — created falls back to date.
+    {
+        std::string online = page.value("created", "");
+        if (online.empty()) online = page.value("date", "");
+        emit("citation_online_date", online);
+    }
+
+    emit("citation_pdf_url", page.value("pdf_url", ""));
+
+    // citation_abstract — tldr (G9) preferred, falls back to description.
+    {
+        std::string abstract = page.value("tldr", "");
+        if (abstract.empty()) abstract = page.value("description", "");
+        emit("citation_abstract", abstract);
+    }
+
+    emit("citation_journal_title", page.value("journal", ""));
+    emit("citation_doi", page.value("doi", ""));
+
+    // citation_keywords — semicolon-joined tags.
+    if (page.contains("tags") && page["tags"].is_array() && !page["tags"].empty()) {
+        std::string keywords;
+        for (const auto& t : page["tags"]) {
+            if (!t.is_string()) continue;
+            if (!keywords.empty()) keywords += "; ";
+            keywords += t.get<std::string>();
+        }
+        emit("citation_keywords", keywords);
+    }
+
+    return out.str();
 }
 
 } // namespace seo_schema

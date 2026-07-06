@@ -321,11 +321,17 @@ static void build_per_item_pages(
             item.value("canonical", ""),
             site_ctx.value("base_url", ""),
             site_ctx.value("twitter_handle", ""));
-        if (cfg.json_ld_enabled) {
+        if (cfg.json_ld_enabled || cfg.citation_tags_enabled) {
             nlohmann::json schema_page = item;
             schema_page["url"] = item_url;
-            ctx["seo_meta"] = ctx["seo_meta"].get<std::string>()
-                + modules::seo_schema::build_json_ld(cfg, schema_page, pages_array);
+            std::string extra;
+            if (cfg.json_ld_enabled) {
+                extra += modules::seo_schema::build_json_ld(cfg, schema_page, pages_array);
+            }
+            if (cfg.citation_tags_enabled) {
+                extra += modules::seo_schema::build_citation_tags(cfg, schema_page);
+            }
+            ctx["seo_meta"] = ctx["seo_meta"].get<std::string>() + extra;
         }
 
         std::string html;
@@ -1451,7 +1457,7 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
                 utils::truncate_text(utils::strip_html_tags(rp.html_content), 200),
                 og_image_for_page, rp.parsed.frontmatter.canonical,
                 cfg.site_base_url, cfg.site_twitter_handle);
-            if (cfg.json_ld_enabled) {
+            if (cfg.json_ld_enabled || cfg.citation_tags_enabled) {
                 nlohmann::json schema_page;
                 schema_page["title"]       = rp.parsed.frontmatter.title;
                 schema_page["url"]         = rp.url;
@@ -1473,7 +1479,12 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
                         cfg.site_base_url + authors_url_base +
                             author_slug_resolved + "/");
                 }
-                seo_meta += modules::seo_schema::build_json_ld(cfg, schema_page, pages_array);
+                if (cfg.json_ld_enabled) {
+                    seo_meta += modules::seo_schema::build_json_ld(cfg, schema_page, pages_array);
+                }
+                if (cfg.citation_tags_enabled) {
+                    seo_meta += modules::seo_schema::build_citation_tags(cfg, schema_page);
+                }
             }
             ctx["seo_meta"] = seo_meta;
 

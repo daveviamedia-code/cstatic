@@ -45,6 +45,14 @@ std::string build_organization_script(const Config& cfg);
 std::vector<SchemaIssue> validate(const nlohmann::json& page_schema,
                                   const std::string& page_url);
 
+// Build citation_* meta tags (Google Scholar, Perplexity, ChatGPT) for one
+// page. Returns a string of <meta name="citation_*" content="..."> tags.
+// Empty when cfg.citation_tags_enabled is false.
+//
+//   page   title/url/date/description/tags +
+//          custom frontmatter (author, pdf_url, journal, doi, tldr)
+std::string build_citation_tags(const Config& cfg, const nlohmann::json& page);
+
 } // namespace seo_schema
 } // namespace modules
 } // namespace cstatic

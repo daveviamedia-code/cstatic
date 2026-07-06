@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-07-06
+
+### Added
+- Citation meta tags (G7). When `seo.citation_tags_enabled = true`, pages emit `citation_*` meta tags (Google Scholar, Perplexity, ChatGPT): `citation_author` (one per author, resolved via the G6 authors index when available), `citation_title`, `citation_publication_date`, `citation_online_date` (from the `created` frontmatter field, falling back to `date`), `citation_pdf_url`, `citation_abstract` (prefers the `tldr` frontmatter field, falls back to `description`), `citation_journal_title`, `citation_doi`, and `citation_keywords` (tags semicolon-joined). The new frontmatter fields (`pdf_url`, `journal`, `doi`, `tldr`, `created`) are read from custom frontmatter — no breaking change to the frontmatter schema. Opt-in and backwards-compatible; existing builds are unaffected unless the flag is set.
+
 ## [0.9.0] - 2026-07-03
 
 ### Added

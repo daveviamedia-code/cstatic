@@ -135,6 +135,10 @@ struct Config {
     // [seo.website] — site-wide WebSite schema tuning.
     std::string website_search_url_template;  // e.g. "/search?q={search_term_string}"
 
+    // [seo.citation_tags] — emit citation_* meta tags (Google Scholar,
+    // Perplexity, ChatGPT). Opt-in; off preserves existing output.
+    bool citation_tags_enabled = false;
+
     // [authors] — E-E-A-T author entity system (G6). When enabled, .md files
     // under authors_dir are loaded into an index; page frontmatter `author:
     // <slug>` resolves to a full author object (templates) and a Person

@@ -304,6 +304,7 @@ Config load_config(const std::string& path, const std::string& env) {
     cfg.org_same_as       = optional_string_array(tbl, "seo.org_same_as");
     cfg.org_url           = optional_string(tbl, "seo.org_url", cfg.site_base_url);
     cfg.website_search_url_template = optional_string(tbl, "seo.website_search_url_template", "");
+    cfg.citation_tags_enabled = optional_bool(tbl, "seo.citation_tags_enabled", cfg.citation_tags_enabled);
 
     // --- [authors] ---
     cfg.authors_enabled = optional_bool(tbl, "authors.enabled", cfg.authors_enabled);
@@ -463,6 +464,7 @@ std::string config_to_json(const Config& cfg) {
     j["seo"]["org_same_as"]                   = cfg.org_same_as;
     j["seo"]["org_url"]                       = cfg.org_url;
     j["seo"]["website_search_url_template"]   = cfg.website_search_url_template;
+    j["seo"]["citation_tags_enabled"]         = cfg.citation_tags_enabled;
 
     j["authors"]["enabled"] = cfg.authors_enabled;
     j["authors"]["dir"]     = cfg.authors_dir;

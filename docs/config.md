@@ -665,6 +665,32 @@ org_same_as = ["https://twitter.com/acme", "https://github.com/acme"]
 website_search_url_template = "/search?q={search_term_string}"
 ```
 
+### Citation Tags
+
+When `seo.citation_tags_enabled = true`, C-Static emits `citation_*` meta tags
+into `{{ seo_meta }}` on every page. These tags are consumed by Google Scholar,
+Perplexity, ChatGPT web search, and other AI-powered research tools for
+citation and source attribution.
+
+| Tag | Source | Notes |
+|-----|--------|-------|
+| `citation_author` | `author` frontmatter | One tag per author; resolved via the authors index (G6) when available |
+| `citation_title` | `title` | |
+| `citation_publication_date` | `date` | ISO 8601 (`YYYY-MM-DD`) |
+| `citation_online_date` | `created` frontmatter, falls back to `date` | |
+| `citation_pdf_url` | `pdf_url` frontmatter | |
+| `citation_abstract` | `tldr` frontmatter, falls back to `description` | |
+| `citation_journal_title` | `journal` frontmatter | |
+| `citation_doi` | `doi` frontmatter | |
+| `citation_keywords` | `tags` | Semicolon-joined |
+
+Missing fields are simply omitted — no partial or empty tags are emitted.
+
+```toml
+[seo]
+citation_tags_enabled = true
+```
+
 ### Authors Options
 
 When `authors.enabled = true`, C-Static loads `.md` files from `authors.dir` (default `src/authors`) into an author index. Each file's stem is the **slug** referenced by page frontmatter `author: <slug>`. The filename `src/authors/jane-doe.md` → slug `jane-doe`.

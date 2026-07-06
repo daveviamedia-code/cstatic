@@ -120,7 +120,30 @@ C-Static can generate a sitemap, RSS feed, JSON Feed, robots.txt, and per-page s
    enabled = true
    ```
 
-9. **Build:** `cstatic build`.
+9. **(Optional, citation tags) Enable `citation_*` meta tags** for Google Scholar / Perplexity / ChatGPT citation. Auto-derives `citation_author`, `citation_title`, `citation_publication_date`, `citation_online_date` (from `created`, falls back to `date`), `citation_pdf_url`, `citation_abstract` (from `tldr`, falls back to `description`), `citation_journal_title`, `citation_doi`, and `citation_keywords` (tags semicolon-joined). Missing fields are omitted.
+
+   ```toml
+   [seo]
+   citation_tags_enabled = true
+   ```
+
+   Per-page frontmatter fields (all optional, read from custom frontmatter):
+
+   ```yaml
+   ---
+   title: A Study of X
+   date: 2025-06-01
+   created: 2025-05-15
+   author: jane-doe
+   pdf_url: https://example.com/paper.pdf
+   journal: Journal of ML
+   doi: 10.1000/xyz123
+   tldr: A one-sentence summary used as the citation abstract.
+   tags: [machine-learning, neural-networks]
+   ---
+   ```
+
+10. **Build:** `cstatic build`.
 
 ## Gotchas
 

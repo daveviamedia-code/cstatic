@@ -21,6 +21,7 @@ A fast, minimal static site generator written in C++17.
 - **Schema blocks** — `{% schema "FAQPage" %}` / `"HowTo"` / `"Review"` blocks in markdown render visible HTML **and** emit the matching JSON-LD into `page.schema_extra` (Q&A and how-to content that AI search engines love to cite)
 - **Standalone FAQ extraction** — `##? question` headings anywhere in a page auto-build a `FAQPage` (visible `<details>` HTML + JSON-LD + `{{ page.faq }}`), no wrapper required; merges with any `{% schema "FAQPage" %}` block into one FAQPage
 - **E-E-A-T author entities** — `authors.enabled = true` loads `src/authors/*.md` into an index; page frontmatter `author: <slug>` resolves to a full author object (`{{ page.author }}`) and a Schema.org `Person` JSON-LD object, with a generated profile page per author at `/authors/<slug>/`
+- **Citation meta tags** — `seo.citation_tags_enabled = true` emits `citation_*` meta tags (Google Scholar, Perplexity, ChatGPT): author, title, publication/online dates, PDF URL, abstract, journal, DOI, and semicolon-joined keywords — all auto-derived from frontmatter
 - **OG image generation** — Per-page social-card images from Inja SVG templates, converted to PNG via rsvg-convert/ImageMagick/Inkscape
 - **Content scaffolding** — `cstatic new` creates pages from archetypes (`archetypes/<kind>.md`) with `{{ title }}`, `{{ slug }}`, and `{{ date }}` placeholders
 - **Scheduled publishing** — Pages with a future `date` are automatically skipped until their date arrives (toggle with `build.publish_future`)

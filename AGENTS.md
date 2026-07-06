@@ -161,6 +161,7 @@ modules.llms_txt_exclude = ["/tags/*"]      # glob against page URLs
 
 [seo]
 json_ld_enabled = true                     # Schema.org JSON-LD (GEO keystone)
+citation_tags_enabled = true               # citation_* meta tags (Scholar/Perplexity/ChatGPT)
 org_name = "My Site Inc"                   # enables site-wide Organization schema
 org_logo = "/logo.png"
 org_same_as = ["https://twitter.com/you"]
@@ -234,7 +235,7 @@ Full reference: `docs/config.md`. Most-used keys:
 | `[build.markdown]` | `extensions`, `shortcodes_dir`, `wikilinks` | all ext / `shortcodes` / `false` | `extensions` ∈ `table`,`tasklist`,`strikethrough`,`autolink`. |
 | `[modules]` | `sitemap`, `rss`, `json_feed`, `robots`, `llms_txt` | `T`/`F`/`F`/`F`/`F` | Plus `rss_title`/`rss_description`/`rss_item_count`, `json_feed_output`, `llms_txt_description`/`llms_txt_max_pages`/`llms_txt_exclude`, `robots_*` (incl. `robots_ai_crawlers_mode` ∈ `off`\|`allow`\|`disallow`\|`custom` + `robots_ai_crawlers_custom`). `llms_txt` writes `/llms.txt` + `/llms-full.txt`; summary falls back to `site.description`. |
 | `[og_images]` | `enabled`, `template`, `output_format`, `width`, `height`, `output_dir` | `F`/`og-default`/`png`/`1200`/`630`/`og` | PNG needs rsvg-convert/convert/inkscape. |
-| `[seo]` | `json_ld_enabled` + `org_*` + `website_search_url_template` | `F` / empty | JSON-LD structured data. `org_name` enables Organization schema; `website_search_url_template` adds WebSite SearchAction. |
+| `[seo]` | `json_ld_enabled` + `citation_tags_enabled` + `org_*` + `website_search_url_template` | `F` / empty | JSON-LD structured data. `org_name` enables Organization schema; `website_search_url_template` adds WebSite SearchAction. `citation_tags_enabled` emits `citation_*` meta tags (Scholar/Perplexity/ChatGPT) — reads `pdf_url`/`journal`/`doi`/`tldr`/`created` from custom frontmatter. |
 | `[authors]` | `enabled`, `dir` | `F`, `src/authors` | E-E-A-T author entities. Loads `<dir>/<slug>.md`; page `author: <slug>` resolves to `{{ page.author }}` + Person JSON-LD. Generates profile pages at `/<dir_base>/<slug>/`. |
 | `[sitemap]` | `exclude` | `[]` | URL paths to drop. |
 | `[data]` | `data_dir` | `_data` | |
@@ -268,7 +269,7 @@ Full reference: `docs/config.md`. Most-used keys:
 | `schema_extra` | — | Array (or object) emitted verbatim as extra JSON-LD `<script>` blocks. Auto-populated by `{% schema %}` blocks (FAQPage/HowTo/Review) and by standalone `##?` FAQ extraction. |
 | `keywords` | — | Array or comma string; articles fall back to comma-joined `tags`. |
 
-Any extra field becomes `page.<field_name>` in templates. Commerce fields (`brand`, `price`, `currency`, `availability`, `rating`, `reviewCount`) and app fields (`application_category`/`category`, `operating_system`) are read by the `Product`/`SoftwareApplication` JSON-LD builders.
+Any extra field becomes `page.<field_name>` in templates. Commerce fields (`brand`, `price`, `currency`, `availability`, `rating`, `reviewCount`) and app fields (`application_category`/`category`, `operating_system`) are read by the `Product`/`SoftwareApplication` JSON-LD builders. Citation fields (`pdf_url`, `journal`, `doi`, `tldr`, `created`) are read by the `citation_*` meta-tag builder when `seo.citation_tags_enabled = true`.
 
 ## 8. Template context variables
 
@@ -284,7 +285,7 @@ Any extra field becomes `page.<field_name>` in templates. Commerce fields (`bran
 | `collections` | All collections keyed by name, e.g. `{{ collections.posts }}`. |
 | `collection` | On a collection index page: `name`, `pages`. |
 | `taxonomy` | On taxonomy pages: `key`, `term`, `pages` (term) or `terms` (index). |
-| `seo_meta` | Auto OG / Twitter Card / canonical meta tags. When `seo.json_ld_enabled = true`, also appends Schema.org JSON-LD `<script>` blocks (WebSite + Organization + page schema + BreadcrumbList + schema_extra). |
+| `seo_meta` | Auto OG / Twitter Card / canonical meta tags. When `seo.json_ld_enabled = true`, also appends Schema.org JSON-LD `<script>` blocks (WebSite + Organization + page schema + BreadcrumbList + schema_extra). When `seo.citation_tags_enabled = true`, also appends `citation_*` meta tags. |
 | `page.faq` | Array of `{question, answer_html, answer_text}` for each standalone `##?` heading on the page (empty when none). Use to render custom FAQ sidebars/layouts; the body HTML always renders inline regardless. |
 
 ## 9. Agent gotchas (read before writing templates/config)

@@ -5,6 +5,7 @@
 #include "content/frontmatter.hpp"
 #include "content/link_graph.hpp"
 #include "content/markdown.hpp"
+#include "content/passage_index.hpp"
 #include "content/schema_blocks.hpp"
 #include "content/shortcodes.hpp"
 #include "data/data_loader.hpp"
@@ -812,6 +813,17 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
                                      "", 0, 0, e.what()});
             rp.render_failed = true;
             continue;
+        }
+
+        // G8: Passage index. Extract citable passages from rendered HTML so
+        // templates get {{ page.passages }} and seo_schema emits JSON-LD
+        // hasPart. Always on (pure derived data, like excerpt). JSON-LD
+        // emission is gated by the existing json_ld_enabled flag in seo_schema.
+        {
+            auto passages = extract_passages(rp.html_content);
+            if (!passages.empty()) {
+                rp.parsed.frontmatter.custom["passages"] = to_json(passages);
+            }
         }
 
         nlohmann::json tags = nlohmann::json::array();

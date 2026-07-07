@@ -471,3 +471,63 @@ TEST_CASE("seo_schema: citation online date prefers created", "[seo_schema]") {
     REQUIRE(contains(html, "citation_online_date\" content=\"2025-05-15\""));
     REQUIRE(contains(html, "citation_publication_date\" content=\"2025-06-01\""));
 }
+
+TEST_CASE("seo_schema: passage index emits hasPart on page schema", "[seo_schema]") {
+    Config cfg = base_config();
+    nlohmann::json page = make_page("Hello", "/posts/hello/", "2025-01-01");
+    page["passages"] = nlohmann::json::array({
+        {{"id", "intro"}, {"heading", "Intro"}, {"text", "First bit."}, {"level", 2}},
+        {{"id", "details"}, {"heading", "Details"}, {"text", "Second bit."}, {"level", 3}},
+    });
+
+    std::string out = build_json_ld(cfg, page, nlohmann::json::array());
+    // Page schema is script index 1 (after the always-on WebSite schema).
+    nlohmann::json s = extract_script(out, 1);
+    REQUIRE(s["@type"] == "BlogPosting");
+    REQUIRE(s.contains("hasPart"));
+    REQUIRE(s["hasPart"].size() == 2);
+    REQUIRE(s["hasPart"][0]["@type"] == "WebPageElement");
+    REQUIRE(s["hasPart"][0]["name"] == "Intro");
+    REQUIRE(s["hasPart"][0]["text"] == "First bit.");
+    REQUIRE(s["hasPart"][0]["url"] == "https://example.com/posts/hello/#intro");
+    REQUIRE(s["hasPart"][1]["url"] == "https://example.com/posts/hello/#details");
+}
+
+TEST_CASE("seo_schema: hasPart respects canonical URL when set", "[seo_schema]") {
+    Config cfg = base_config();
+    nlohmann::json page = make_page("P", "/posts/p/", "2025-01-01");
+    page["canonical"] = "https://canonical.example.com/post/";
+    page["passages"] = nlohmann::json::array({
+        {{"id", "sec"}, {"heading", "Sec"}, {"text", "Body."}, {"level", 2}},
+    });
+
+    std::string out = build_json_ld(cfg, page, nlohmann::json::array());
+    nlohmann::json s = extract_script(out, 1);
+    REQUIRE(s["hasPart"][0]["url"] == "https://canonical.example.com/post/#sec");
+}
+
+TEST_CASE("seo_schema: explicit schema.hasPart overrides auto-generated", "[seo_schema]") {
+    Config cfg = base_config();
+    nlohmann::json page = make_page("P", "/p/", "2025-01-01");
+    page["passages"] = nlohmann::json::array({
+        {{"id", "auto"}, {"heading", "Auto"}, {"text", "Auto body."}, {"level", 2}},
+    });
+    // Explicit schema.hasPart should win (deep_merge replaces arrays).
+    page["schema"] = nlohmann::json::object();
+    page["schema"]["hasPart"] = nlohmann::json::array({
+        nlohmann::json::object({{"@type", "WebPageElement"}, {"name", "Manual"}}),
+    });
+
+    std::string out = build_json_ld(cfg, page, nlohmann::json::array());
+    nlohmann::json s = extract_script(out, 1);
+    REQUIRE(s["hasPart"].size() == 1);
+    REQUIRE(s["hasPart"][0]["name"] == "Manual");
+}
+
+TEST_CASE("seo_schema: no passages -> no hasPart key", "[seo_schema]") {
+    Config cfg = base_config();
+    auto page = make_page("P", "/p/", "2025-01-01");
+    std::string out = build_json_ld(cfg, page, nlohmann::json::array());
+    nlohmann::json s = extract_script(out, 1);
+    REQUIRE_FALSE(s.contains("hasPart"));
+}

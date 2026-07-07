@@ -18,6 +18,7 @@ set(LIB_SOURCES
     ${CMAKE_SOURCE_DIR}/src/content/frontmatter.cpp
     ${CMAKE_SOURCE_DIR}/src/content/link_graph.cpp
     ${CMAKE_SOURCE_DIR}/src/content/markdown.cpp
+    ${CMAKE_SOURCE_DIR}/src/content/passage_index.cpp
     ${CMAKE_SOURCE_DIR}/src/content/schema_blocks.cpp
     ${CMAKE_SOURCE_DIR}/src/content/shortcodes.cpp
     ${CMAKE_SOURCE_DIR}/src/data/data_loader.cpp
@@ -54,6 +55,7 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/tests/test_content_generator.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_link_checker.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_link_graph.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_passage_index.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_error_format.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_file_watcher.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_robots.cpp

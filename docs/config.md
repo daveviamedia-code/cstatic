@@ -631,6 +631,9 @@ Each page receives, in order:
 4. A **BreadcrumbList** for nested pages (URLs deeper than `/`).
 5. One verbatim block per `schema_extra` frontmatter entry.
 
+A page-level **`hasPart`** array is auto-attached to the page schema when
+the page contains headings (see [Passage Index](#passage-index) below).
+
 **Type resolution** (first match wins): `page.schema["@type"]` → `page.type`
 frontmatter → `BlogPosting` if the URL starts with `/posts/` → `WebPage`.
 Supported `@type`s: `WebPage`, `BlogPosting`, `Article`, `NewsArticle`,
@@ -664,6 +667,58 @@ org_founders = ["Alice", "Bob"]
 org_same_as = ["https://twitter.com/acme", "https://github.com/acme"]
 website_search_url_template = "/search?q={search_term_string}"
 ```
+
+### Passage Index
+
+C-Static automatically extracts a **passage index** from every page's rendered
+HTML — an array of `{id, heading, text, level}` for each `<h2>`–`<h6>` heading
+plus the sibling text that follows it (up to the next heading). This is pure
+derived metadata (like `excerpt`), so it is always on regardless of config.
+
+AI engines (Google AI Overviews, ChatGPT web search, Perplexity) increasingly
+cite **specific passages** rather than whole pages. Exposing passages both to
+templates and as machine-readable JSON-LD gives those engines the boundaries
+and anchor targets they need.
+
+**Template usage** — `{{ page.passages }}` is an array of objects:
+
+```html
+{% for p in page.passages %}
+<li><a href="#{{ p.id }}">{{ p.heading }}</a> <small>(L{{ p.level }})</small></li>
+{% endfor %}
+```
+
+Each entry has:
+
+| Field | Description |
+|-------|-------------|
+| `id` | Slugified heading text (e.g. `"getting-started"`); collisions get `-1`, `-2`, … suffixes |
+| `heading` | Heading text with HTML stripped |
+| `text` | Body text until the next heading, HTML stripped, whitespace collapsed, capped at 500 chars |
+| `level` | Heading level (`2`–`6`; `<h1>` is skipped as the page title) |
+
+**JSON-LD `hasPart`** — when `seo.json_ld_enabled = true`, each passage is
+emitted as a `WebPageElement` under the page schema's `hasPart`:
+
+```json
+"hasPart": [
+  {
+    "@type": "WebPageElement",
+    "name": "Getting Started",
+    "text": "Install with cmake …",
+    "url": "https://example.com/docs/#getting-started"
+  }
+]
+```
+
+The `url` is `<canonical or base_url + page.url>#<passage-id>` — ready for AI
+engines to cite the specific section. An explicit `page.schema.hasPart` in
+frontmatter overrides the auto-generated array (deep-merge semantics).
+
+> **Note**: cmark-gfm doesn't emit `id="…"` attributes on heading tags by
+> default. The `url` field above uses the slugified heading text directly.
+> A future G11 (auto TOC) release will inject matching `id` attributes so
+> in-page anchor links resolve — they'll share the same slugify algorithm.
 
 ### Citation Tags
 

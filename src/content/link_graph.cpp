@@ -1,4 +1,5 @@
 #include "content/link_graph.hpp"
+#include "utils/slugify.hpp"
 #include "utils/terminal.hpp"
 
 #include <algorithm>
@@ -21,31 +22,8 @@ std::string to_lower(const std::string& s) {
     return out;
 }
 
-// Slugify: lowercase, keep alphanumerics, convert spaces/underscores to
-// hyphens, collapse runs of hyphens, strip leading/trailing hyphens.
-// Used for both indexing (`slugify(title) -> url`) and lookup
-// (`slugify(target) -> url`) so wikilinks match across casing/spacing.
-std::string slugify(const std::string& s) {
-    std::string out;
-    out.reserve(s.size());
-    bool prev_hyphen = false;
-    for (char c : s) {
-        unsigned char uc = static_cast<unsigned char>(c);
-        if (std::isalnum(uc)) {
-            out += static_cast<char>(std::tolower(uc));
-            prev_hyphen = false;
-        } else if (c == ' ' || c == '_' || c == '-') {
-            if (!prev_hyphen && !out.empty()) {
-                out += '-';
-                prev_hyphen = true;
-            }
-        }
-        // other punctuation: skip
-    }
-    // strip trailing hyphen (loop above already prevents runs)
-    if (!out.empty() && out.back() == '-') out.pop_back();
-    return out;
-}
+// Slugify is now in utils/slugify.hpp (shared with G8 passage index + G11 TOC).
+using utils::slugify;
 
 // Extract the filename-stem segment from a URL.
 //   "/posts/hello/" -> "hello"

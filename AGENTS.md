@@ -181,6 +181,8 @@ In every layout's `<head>`, add `{{ seo_meta }}` — it emits description, Open 
 
 **Standalone `##?` FAQ extraction** (no config flag). `##? question` headings **outside** any `{% schema %}` wrapper are also auto-processed: each renders the same `<section class="faq"><details><summary>…</summary>…</details>` visible HTML, populates a `{{ page.faq }}` array (`[{question, answer_html, answer_text}]`) for custom layouts, and merges a `FAQPage` into `schema_extra`. If the page also has a `{% schema "FAQPage" %}` block, the two are combined into ONE `FAQPage` whose `mainEntity` holds every question. Answer-boundary semantics match the schema block (an answer runs to the next `##?` or end of body), so standalone FAQ is terminal content — place it last on the page.
 
+**Passage index** (no config flag). Every page's `<h2>`–`<h6>` headings are auto-extracted into `{{ page.passages }}` (`[{id, heading, text, level}]`) where `id` is the slugified heading (collisions get `-1`, `-2`, … suffixes), `text` is the body until the next heading (HTML stripped, whitespace collapsed, ≤500 chars), and `level` is 2–6 (`<h1>` is skipped as the page title). When `seo.json_ld_enabled = true`, each passage is also emitted as a `WebPageElement` under `hasPart` on the page schema with `url = <canonical or base_url+page.url>#<id>` — giving AI engines (Google AI Overviews, ChatGPT, Perplexity) machine-readable passage boundaries and anchor targets. An explicit `page.schema.hasPart` in frontmatter overrides the auto-generated array (deep-merge). cmark-gfm doesn't emit `id="…"` attributes today; a future G11 (auto-TOC) will inject matching anchors using the same shared `utils::slugify` algorithm.
+
 **E-E-A-T author entities** (`authors.enabled = true`). Author `.md` files under `authors.dir` (default `src/authors`) become first-class entities. The filename stem is the slug; page frontmatter `author: <slug>` resolves to a full author object exposed as `{{ page.author }}` (name, title, bio, avatar, social links, expertise) and a Schema.org `Person` JSON-LD object. Each author gets a generated profile page at `/<authors_dir_basename>/<slug>/` rendered with `templates/author.html` (template receives `{{ author }}` with a `.posts` array). The full roster is available as `{{ site.authors }}`. Author files are **excluded** from the regular markdown page collection — they are entities, not content pages. Author frontmatter: `name`, `title`, `bio`, `avatar`, `email`, `twitter`, `linkedin`, `github`, `website`, `same_as[]`, `expertise[]`. See `docs/config.md` → Authors Options.
 
 ### 5.7 Add data-driven pages
@@ -276,7 +278,7 @@ Any extra field becomes `page.<field_name>` in templates. Commerce fields (`bran
 | Variable | Description |
 |----------|-------------|
 | `site` | Site config: `title`, `base_url`, `language`, `env` (current env name), `twitter_handle`, and `authors` (map of slug→author object, when `authors.enabled = true`). |
-| `page` | Current page: `title`, `url`, `content`, `date`, `tags`, `excerpt`, plus any extra frontmatter. Gains `backlinks` when wikilinks are on. Gains `faq` (`[{question, answer_html, answer_text}]`) when standalone `##?` questions are present. `page.author` is a resolved object (name, title, bio, …) when `authors.enabled = true` and the slug matches a loaded author. |
+| `page` | Current page: `title`, `url`, `content`, `date`, `tags`, `excerpt`, `passages` (`[{id, heading, text, level}]`), plus any extra frontmatter. Gains `backlinks` when wikilinks are on. Gains `faq` (`[{question, answer_html, answer_text}]`) when standalone `##?` questions are present. `page.author` is a resolved object (name, title, bio, …) when `authors.enabled = true` and the slug matches a loaded author. |
 | `author` | On generated author profile pages (`/<authors_dir>/<slug>/`): the author object plus `.posts` (their published pages). `page.type` is `"ProfilePage"`. |
 | `pages` | All pages, sorted by date (newest first). Excludes drafts, future-scheduled, and alias redirect stubs. |
 | `data` | All loaded data files, keyed by filename stem. |
@@ -285,8 +287,9 @@ Any extra field becomes `page.<field_name>` in templates. Commerce fields (`bran
 | `collections` | All collections keyed by name, e.g. `{{ collections.posts }}`. |
 | `collection` | On a collection index page: `name`, `pages`. |
 | `taxonomy` | On taxonomy pages: `key`, `term`, `pages` (term) or `terms` (index). |
-| `seo_meta` | Auto OG / Twitter Card / canonical meta tags. When `seo.json_ld_enabled = true`, also appends Schema.org JSON-LD `<script>` blocks (WebSite + Organization + page schema + BreadcrumbList + schema_extra). When `seo.citation_tags_enabled = true`, also appends `citation_*` meta tags. |
+| `seo_meta` | Auto OG / Twitter Card / canonical meta tags. When `seo.json_ld_enabled = true`, also appends Schema.org JSON-LD `<script>` blocks (WebSite + Organization + page schema — including a `hasPart` array of passage `WebPageElement`s when the page has headings — + BreadcrumbList + schema_extra). When `seo.citation_tags_enabled = true`, also appends `citation_*` meta tags. |
 | `page.faq` | Array of `{question, answer_html, answer_text}` for each standalone `##?` heading on the page (empty when none). Use to render custom FAQ sidebars/layouts; the body HTML always renders inline regardless. |
+| `page.passages` | Array of `{id, heading, text, level}` for each `<h2>`–`<h6>` heading on the page (empty when none). `id` is slugified heading text (collisions suffixed `-1`, `-2`, …); `text` is body-until-next-heading (≤500 chars). Always populated; JSON-LD `hasPart` emission gates on `seo.json_ld_enabled`. |
 
 ## 9. Agent gotchas (read before writing templates/config)
 

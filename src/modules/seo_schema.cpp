@@ -327,6 +327,38 @@ nlohmann::json build_software_application_schema(const Config& cfg,
     return j;
 }
 
+// G8: inject passage index as `hasPart` on the page schema. WebPageElement
+// entries carry the slugified id (as an in-page anchor URL), the heading
+// text, and the body excerpt. Called from build_page_schema AFTER the
+// type-specific builder, BEFORE deep_merge — so an explicit `page.schema.hasPart`
+// in frontmatter still wins.
+void add_has_part(nlohmann::json& schema, const Config& cfg,
+                  const nlohmann::json& page) {
+    if (!page.contains("passages") || !page["passages"].is_array()
+        || page["passages"].empty()) {
+        return;
+    }
+    std::string canonical = page.value("canonical", "");
+    std::string base = canonical.empty()
+                       ? resolve_url(cfg.site_base_url, page.value("url", ""))
+                       : canonical;
+    nlohmann::json has_part = nlohmann::json::array();
+    for (const auto& p : page["passages"]) {
+        if (!p.is_object()) continue;
+        nlohmann::json elem;
+        elem["@type"] = "WebPageElement";
+        if (p.contains("heading")) elem["name"] = p["heading"];
+        if (p.contains("text"))    elem["text"] = p["text"];
+        if (!base.empty() && p.contains("id") && p["id"].is_string()) {
+            elem["url"] = base + "#" + p["id"].get<std::string>();
+        }
+        has_part.push_back(std::move(elem));
+    }
+    if (!has_part.empty()) {
+        schema["hasPart"] = std::move(has_part);
+    }
+}
+
 // Resolve the @type using the documented precedence, build the auto schema,
 // then deep-merge any explicit `page.schema` over it.
 nlohmann::json build_page_schema(const Config& cfg, const nlohmann::json& page) {
@@ -354,6 +386,9 @@ nlohmann::json build_page_schema(const Config& cfg, const nlohmann::json& page) 
     } else {
         schema = build_webpage_schema(cfg, page, type);
     }
+
+    // G8: attach passage index (before deep_merge so explicit schema wins).
+    add_has_part(schema, cfg, page);
 
     if (has_schema) {
         deep_merge(schema, page["schema"]);

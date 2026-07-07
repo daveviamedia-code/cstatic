@@ -297,7 +297,7 @@ bool        authors_enabled = false;
 
 ## Tier 2 — Content-Quality Signals
 
-### G8. Passage Index
+### G8. Passage Index — DONE
 
 **Approach**: Per-page `page.passages` array of `{heading, text, id, level}` extracted from rendered HTML. Exposed to templates and emitted as JSON-LD extension (`hasPart`/`mainEntity` on the page schema). Helps AI engines locate citable passages.
 

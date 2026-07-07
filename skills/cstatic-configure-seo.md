@@ -143,7 +143,23 @@ C-Static can generate a sitemap, RSS feed, JSON Feed, robots.txt, and per-page s
    ---
    ```
 
-10. **Build:** `cstatic build`.
+10. **Passage index (automatic — nothing to enable).** Every page's `<h2>`–`<h6>` headings are auto-extracted into `{{ page.passages }}` — an array of `{id, heading, text, level}`:
+
+    ```html
+    <ul class="toc">
+    {% for p in page.passages %}
+      <li><a href="#{{ p.id }}">{{ p.heading }}</a> <small>(L{{ p.level }})</small></li>
+    {% endfor %}
+    </ul>
+    ```
+
+    - `id` = slugified heading text (`"Hello, World!"` → `"hello-world"`); collisions get `-1`, `-2`, … suffixes.
+    - `text` = body-until-next-heading, HTML stripped, whitespace collapsed, ≤500 chars.
+    - `level` = 2–6 (`<h1>` is skipped as the page title).
+    - When `seo.json_ld_enabled = true` (step 1), each passage is also emitted as a `WebPageElement` under the page schema's `hasPart`, with `url = <canonical or base_url + page.url>#<id>` — AI engines get machine-readable passage boundaries + anchor targets.
+    - An explicit `page.schema.hasPart` in frontmatter overrides the auto-generated array (deep-merge).
+
+11. **Build:** `cstatic build`.
 
 ## Gotchas
 
@@ -157,4 +173,5 @@ C-Static can generate a sitemap, RSS feed, JSON Feed, robots.txt, and per-page s
 - JSON-LD `page.schema` deep-merges: auto-generated fields (`headline`, `datePublished`, `author`, `image`, `url`...) are preserved; only the keys you list are overridden. Use `schema_extra` (array) when you need entirely separate top-level schemas (FAQ, Event, etc.).
 - **FAQ authoring shortcut**: `##? question` headings anywhere in a page (no `{% schema %}` wrapper needed) auto-build a `FAQPage` — visible `<details>` HTML inline + a `FAQPage` JSON-LD merged into `schema_extra` + a `{{ page.faq }}` array. Wraps with `{% schema "FAQPage" %}` are still supported and merge into the same single `FAQPage`. Standalone FAQ is terminal (answers run to the next `##?` or end of body) — place it last on the page.
 - **Author files are entities, not pages**: when `authors.enabled = true`, `src/authors/*.md` are loaded into the author index and **excluded** from the regular markdown page collection. Don't expect them to appear in `{{ pages }}` or render with the default template — they render via `templates/author.html` at `/<slug>/`.
+- **Passage IDs are slugified from heading text**: cmark-gfm doesn't emit `id="…"` attributes on `<hN>` tags by default, so `#passage-id` anchor links won't resolve out of the box today. The `hasPart[].url` JSON-LD field uses the slugified heading text directly so the targets are *named* and stable. A future G11 (auto TOC) release will inject matching `id="..."` attributes into the rendered HTML using the same shared `utils::slugify` algorithm — at which point the JSON-LD anchor targets will also start resolving in browsers.
 - **`json_ld_enabled` is under `[seo]`, not `[modules]`**: the scaffold's commented hint sits under `[modules]` but the real key is `seo.json_ld_enabled`. The `[authors]` table is separate and gates only the author entity system (resolution + profile pages), independent of JSON-LD.

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-07-07
+
+### Added
+- Passage index (G8). Every page now exposes a `{{ page.passages }}` template array of `{id, heading, text, level}` entries extracted from `<h2>`–`<h6>` headings, and — when `seo.json_ld_enabled = true` — emits a `hasPart` array of `WebPageElement` entries on the page's JSON-LD schema so AI engines (Google AI Overviews, ChatGPT web search, Perplexity) can cite specific passages by anchor. Always on (pure derived metadata, like `excerpt`); JSON-LD emission rides the existing `json_ld_enabled` flag. Duplicate headings get `-1`, `-2`, … suffixes; passage text is capped at 500 characters. Also extracts a shared `utils::slugify` helper (header-only) from the wikilinks code so G11's auto-TOC anchor IDs will match passage IDs.
+
 ## [0.10.0] - 2026-07-06
 
 ### Added

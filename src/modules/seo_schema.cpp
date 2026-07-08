@@ -75,6 +75,15 @@ void deep_merge(nlohmann::json& base, const nlohmann::json& overlay) {
     }
 }
 
+// Resolve the page description using the G9 preference chain:
+// tldr → description → excerpt. Returns empty string when none are present.
+std::string resolve_description(const nlohmann::json& page) {
+    std::string desc = page.value("tldr", "");
+    if (desc.empty()) desc = page.value("description", "");
+    if (desc.empty()) desc = page.value("excerpt", "");
+    return desc;
+}
+
 // --- Site-wide schemas ---
 
 nlohmann::json build_website_schema(const Config& cfg) {
@@ -136,8 +145,7 @@ nlohmann::json build_webpage_schema(const Config& cfg, const nlohmann::json& pag
                       : resolve_url(cfg.site_base_url, page.value("url", ""));
     if (!url.empty()) j["url"] = url;
 
-    std::string desc = page.value("description", "");
-    if (desc.empty()) desc = page.value("excerpt", "");
+    std::string desc = resolve_description(page);
     if (!desc.empty()) j["description"] = desc;
 
     std::string image = page.value("image", "");
@@ -216,8 +224,7 @@ nlohmann::json build_article_schema(const Config& cfg, const nlohmann::json& pag
         j["mainEntityOfPage"] = meop;
     }
 
-    std::string desc = page.value("description", "");
-    if (desc.empty()) desc = page.value("excerpt", "");
+    std::string desc = resolve_description(page);
     if (!desc.empty()) j["description"] = desc;
 
     nlohmann::json kw = resolve_keywords(page, /*fallback_to_tags=*/true);
@@ -237,8 +244,7 @@ nlohmann::json build_product_schema(const Config& cfg, const nlohmann::json& pag
     std::string title = page.value("title", "");
     if (!title.empty()) j["name"] = title;
 
-    std::string desc = page.value("description", "");
-    if (desc.empty()) desc = page.value("excerpt", "");
+    std::string desc = resolve_description(page);
     if (!desc.empty()) j["description"] = desc;
 
     std::string image = page.value("image", "");
@@ -287,8 +293,7 @@ nlohmann::json build_software_application_schema(const Config& cfg,
     std::string title = page.value("title", "");
     if (!title.empty()) j["name"] = title;
 
-    std::string desc = page.value("description", "");
-    if (desc.empty()) desc = page.value("excerpt", "");
+    std::string desc = resolve_description(page);
     if (!desc.empty()) j["description"] = desc;
 
     std::string category = page.value("application_category", "");
@@ -359,6 +364,35 @@ void add_has_part(nlohmann::json& schema, const Config& cfg,
     }
 }
 
+// G9: inject key_takeaways as an ItemList on the page schema's mainEntity.
+// Called from build_page_schema AFTER the type-specific builder + add_has_part,
+// BEFORE deep_merge — so an explicit `page.schema.mainEntity` still wins.
+void add_key_takeaways(nlohmann::json& schema, const nlohmann::json& page) {
+    if (!page.contains("key_takeaways") || !page["key_takeaways"].is_array()
+        || page["key_takeaways"].empty()) {
+        return;
+    }
+    nlohmann::json items = nlohmann::json::array();
+    int position = 0;
+    for (const auto& k : page["key_takeaways"]) {
+        if (!k.is_string()) continue;
+        const std::string& text = k.get<std::string>();
+        if (text.empty()) continue;
+        ++position;
+        nlohmann::json item;
+        item["@type"] = "ListItem";
+        item["position"] = position;
+        item["name"] = text;
+        items.push_back(std::move(item));
+    }
+    if (!items.empty()) {
+        nlohmann::json me;
+        me["@type"] = "ItemList";
+        me["itemListElement"] = std::move(items);
+        schema["mainEntity"] = std::move(me);
+    }
+}
+
 // Resolve the @type using the documented precedence, build the auto schema,
 // then deep-merge any explicit `page.schema` over it.
 nlohmann::json build_page_schema(const Config& cfg, const nlohmann::json& page) {
@@ -389,6 +423,9 @@ nlohmann::json build_page_schema(const Config& cfg, const nlohmann::json& page) 
 
     // G8: attach passage index (before deep_merge so explicit schema wins).
     add_has_part(schema, cfg, page);
+
+    // G9: attach key takeaways as mainEntity ItemList (before deep_merge).
+    add_key_takeaways(schema, page);
 
     if (has_schema) {
         deep_merge(schema, page["schema"]);

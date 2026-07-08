@@ -270,6 +270,8 @@ Full reference: `docs/config.md`. Most-used keys:
 | `schema` | — | Object deep-merged over the auto-generated JSON-LD schema. Use `schema["@type"]` to override the type. |
 | `schema_extra` | — | Array (or object) emitted verbatim as extra JSON-LD `<script>` blocks. Auto-populated by `{% schema %}` blocks (FAQPage/HowTo/Review) and by standalone `##?` FAQ extraction. |
 | `keywords` | — | Array or comma string; articles fall back to comma-joined `tags`. |
+| `tldr` | — | One-sentence summary. Overrides `description`/`excerpt` as the meta description and JSON-LD schema `description` (priority: tldr → description → excerpt). Also used as `citation_abstract` by the citation-tags builder. |
+| `key_takeaways` | — | Array of strings. When non-empty, the JSON-LD schema gains a `mainEntity` `ItemList` of `ListItem` entries (position + name). Override with explicit `page.schema.mainEntity`. |
 
 Any extra field becomes `page.<field_name>` in templates. Commerce fields (`brand`, `price`, `currency`, `availability`, `rating`, `reviewCount`) and app fields (`application_category`/`category`, `operating_system`) are read by the `Product`/`SoftwareApplication` JSON-LD builders. Citation fields (`pdf_url`, `journal`, `doi`, `tldr`, `created`) are read by the `citation_*` meta-tag builder when `seo.citation_tags_enabled = true`.
 
@@ -287,9 +289,11 @@ Any extra field becomes `page.<field_name>` in templates. Commerce fields (`bran
 | `collections` | All collections keyed by name, e.g. `{{ collections.posts }}`. |
 | `collection` | On a collection index page: `name`, `pages`. |
 | `taxonomy` | On taxonomy pages: `key`, `term`, `pages` (term) or `terms` (index). |
-| `seo_meta` | Auto OG / Twitter Card / canonical meta tags. When `seo.json_ld_enabled = true`, also appends Schema.org JSON-LD `<script>` blocks (WebSite + Organization + page schema — including a `hasPart` array of passage `WebPageElement`s when the page has headings — + BreadcrumbList + schema_extra). When `seo.citation_tags_enabled = true`, also appends `citation_*` meta tags. |
+| `seo_meta` | Auto OG / Twitter Card / canonical meta tags. When `seo.json_ld_enabled = true`, also appends Schema.org JSON-LD `<script>` blocks (WebSite + Organization + page schema — including `hasPart` passage `WebPageElement`s when the page has headings, and `mainEntity` `ItemList` of key takeaways when `key_takeaways` frontmatter is set — + BreadcrumbList + schema_extra). When `seo.citation_tags_enabled = true`, also appends `citation_*` meta tags. Meta description prefers `tldr` → `description` → `excerpt`. |
 | `page.faq` | Array of `{question, answer_html, answer_text}` for each standalone `##?` heading on the page (empty when none). Use to render custom FAQ sidebars/layouts; the body HTML always renders inline regardless. |
 | `page.passages` | Array of `{id, heading, text, level}` for each `<h2>`–`<h6>` heading on the page (empty when none). `id` is slugified heading text (collisions suffixed `-1`, `-2`, …); `text` is body-until-next-heading (≤500 chars). Always populated; JSON-LD `hasPart` emission gates on `seo.json_ld_enabled`. |
+| `page.tldr` | The `tldr` frontmatter string (empty when absent). Overrides meta description and schema description when present. |
+| `page.key_takeaways` | The `key_takeaways` frontmatter array of strings (empty when absent). Populates JSON-LD `mainEntity` `ItemList` when non-empty. |
 
 ## 9. Agent gotchas (read before writing templates/config)
 

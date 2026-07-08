@@ -327,7 +327,7 @@ page_context_json["passages"] = to_json_array(rp.passages);
 
 ---
 
-### G9. TL;DR / Key Takeaways Frontmatter
+### G9. TL;DR / Key Takeaways Frontmatter   DONE
 
 **Approach**: `tldr` (string) and `key_takeaways` (array of strings) frontmatter flow into JSON-LD `description` (augmenting `excerpt`) and `mainEntity` of the page schema.
 

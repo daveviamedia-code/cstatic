@@ -159,7 +159,22 @@ C-Static can generate a sitemap, RSS feed, JSON Feed, robots.txt, and per-page s
     - When `seo.json_ld_enabled = true` (step 1), each passage is also emitted as a `WebPageElement` under the page schema's `hasPart`, with `url = <canonical or base_url + page.url>#<id>` — AI engines get machine-readable passage boundaries + anchor targets.
     - An explicit `page.schema.hasPart` in frontmatter overrides the auto-generated array (deep-merge).
 
-11. **Build:** `cstatic build`.
+11. **TL;DR / Key Takeaways (automatic — nothing to enable).** Two frontmatter fields improve AI citability:
+    - `tldr` (string) — overrides `description`/`excerpt` as both the `<meta name="description">` and the JSON-LD schema `description`. Priority: tldr → description → excerpt.
+    - `key_takeaways` (array of strings) — when non-empty and `seo.json_ld_enabled = true`, the page schema gains a `mainEntity` `ItemList` of `ListItem` entries (each with `position` + `name`). An explicit `page.schema.mainEntity` overrides it.
+    - Both available as `{{ page.tldr }}` / `{{ page.key_takeaways }}`.
+    - Scaffold shortcodes: `{{< tldr >}}…{{< /tldr >}}` and `{{< takeaways >}}…{{< /takeaways >}}` wrap the content in styled HTML for visible rendering.
+
+    ```yaml
+    ---
+    tldr: "A one-sentence summary."
+    key_takeaways:
+      - Point one
+      - Point two
+    ---
+    ```
+
+12. **Build:** `cstatic build`.
 
 ## Gotchas
 

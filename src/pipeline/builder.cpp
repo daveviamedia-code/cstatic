@@ -123,9 +123,13 @@ struct PageRecord {
 static std::string build_seo_meta(
     const std::string& title, const std::string& url, const std::string& description,
     const std::string& excerpt, const std::string& image, const std::string& canonical,
-    const std::string& base_url, const std::string& twitter_handle)
+    const std::string& base_url, const std::string& twitter_handle,
+    const std::string& tldr = "")
 {
-    std::string desc = !description.empty() ? description : excerpt;
+    // G9: tldr is the most concise description and wins over everything.
+    std::string desc;
+    if (!tldr.empty()) desc = tldr;
+    else desc = !description.empty() ? description : excerpt;
     std::string card = !image.empty() ? "summary_large_image" : "summary";
     std::string canonical_url = !canonical.empty() ? canonical : (base_url + url);
 
@@ -321,7 +325,8 @@ static void build_per_item_pages(
             item.value("image", ""),
             item.value("canonical", ""),
             site_ctx.value("base_url", ""),
-            site_ctx.value("twitter_handle", ""));
+            site_ctx.value("twitter_handle", ""),
+            item.value("tldr", ""));
         if (cfg.json_ld_enabled || cfg.citation_tags_enabled) {
             nlohmann::json schema_page = item;
             schema_page["url"] = item_url;
@@ -1463,12 +1468,20 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
                 auto it = og_image_map.find(rp.url);
                 if (it != og_image_map.end()) og_image_for_page = it->second;
             }
+            // G9: tldr from frontmatter overrides description for meta description.
+            std::string page_tldr;
+            {
+                auto it = rp.parsed.frontmatter.custom.find("tldr");
+                if (it != rp.parsed.frontmatter.custom.end() && it->is_string()) {
+                    page_tldr = it->get<std::string>();
+                }
+            }
             std::string seo_meta = build_seo_meta(
                 rp.parsed.frontmatter.title, rp.url,
                 rp.parsed.frontmatter.description,
                 utils::truncate_text(utils::strip_html_tags(rp.html_content), 200),
                 og_image_for_page, rp.parsed.frontmatter.canonical,
-                cfg.site_base_url, cfg.site_twitter_handle);
+                cfg.site_base_url, cfg.site_twitter_handle, page_tldr);
             if (cfg.json_ld_enabled || cfg.citation_tags_enabled) {
                 nlohmann::json schema_page;
                 schema_page["title"]       = rp.parsed.frontmatter.title;

@@ -525,6 +525,26 @@ Welcome to your blog! This is your first post. Edit or delete it, then run `csta
 </aside>
 )";
 
+    // shortcodes/tldr.html — visible TL;DR box (G9).
+    // Usage: {{< tldr >}}A concise summary.{{< /tldr >}}
+    // The same text should also go in frontmatter `tldr` for SEO/schema.
+    const char* shortcode_tldr_html = R"(<aside class="tldr">
+  <strong>TL;DR:</strong> {{ content }}
+</aside>
+)";
+
+    // shortcodes/takeaways.html — visible key-takeaways list (G9).
+    // Usage: {{< takeaways >}}
+    // - Point one
+    // - Point two
+    // {{< /takeaways >}}
+    // The same items should also go in frontmatter `key_takeaways` for schema.
+    const char* shortcode_takeaways_html = R"(<section class="takeaways">
+  <h3>Key Takeaways</h3>
+  {{ content }}
+</section>
+)";
+
     // archetypes/default.md — fallback template for `cstatic new`.
     // Placeholders {{ title }}, {{ date }}, {{ slug }} are substituted.
     const char* archetype_default_md = R"(---
@@ -666,6 +686,8 @@ Thumbs.db
         {"shortcodes/youtube.html",  shortcode_youtube_html},
         {"shortcodes/figure.html",   shortcode_figure_html},
         {"shortcodes/note.html",     shortcode_note_html},
+        {"shortcodes/tldr.html",     shortcode_tldr_html},
+        {"shortcodes/takeaways.html", shortcode_takeaways_html},
         {"archetypes/default.md",    archetype_default_md},
         {"archetypes/post.md",       archetype_post_md},
         {"archetypes/author.md",     archetype_author_md},

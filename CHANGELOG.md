@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-07-08
+
+### Added
+- TL;DR / Key Takeaways frontmatter (G9). Two new frontmatter fields — `tldr` (string) and `key_takeaways` (array of strings) — flow into both SEO metadata and Schema.org JSON-LD. When `tldr` is present, it overrides `description`/`excerpt` as the meta description and schema `description` (priority: tldr → description → excerpt), giving AI engines and search results the most concise summary. When `key_takeaways` is a non-empty array, the page's JSON-LD schema gains a `mainEntity` `ItemList` of `ListItem` entries — each with `position` and `name` — so AI engines can surface the key points. Both fields are read from custom frontmatter (no breaking change to the frontmatter schema) and are available to templates as `{{ page.tldr }}` and `{{ page.key_takeaways }}`. Explicit `page.schema.mainEntity` in frontmatter overrides the auto-generated ItemList (deep-merge). Two new scaffold shortcodes — `{{< tldr >}}…{{< /tldr >}}` and `{{< takeaways >}}…{{< /takeaways >}}` — provide visible rendering wrappers. Always on (pure derived metadata, like `excerpt`); JSON-LD emission rides the existing `json_ld_enabled` flag.
+
 ## [0.11.0] - 2026-07-07
 
 ### Added

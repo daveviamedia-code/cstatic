@@ -746,6 +746,60 @@ Missing fields are simply omitted — no partial or empty tags are emitted.
 citation_tags_enabled = true
 ```
 
+### TL;DR / Key Takeaways
+
+Two frontmatter fields — `tldr` (string) and `key_takeaways` (array of strings) —
+flow into both SEO metadata and Schema.org JSON-LD. Both are read from custom
+frontmatter, so no config flag is required.
+
+**`tldr`** — When present, overrides `description` and `excerpt` as:
+- The `<meta name="description">` tag (priority: tldr → description → excerpt)
+- The JSON-LD schema `description` field (same priority chain)
+
+This gives AI engines and search results the most concise page summary.
+
+**`key_takeaways`** — When a non-empty array, the page's JSON-LD schema gains a
+`mainEntity` `ItemList`:
+
+```json
+"mainEntity": {
+  "@type": "ItemList",
+  "itemListElement": [
+    {"@type": "ListItem", "position": 1, "name": "First point"},
+    {"@type": "ListItem", "position": 2, "name": "Second point"}
+  ]
+}
+```
+
+An explicit `page.schema.mainEntity` in frontmatter overrides the auto-generated
+ItemList (deep-merge semantics). JSON-LD emission requires `seo.json_ld_enabled
+= true`; the `{{ page.tldr }}` and `{{ page.key_takeaways }}` template variables
+are always available.
+
+**Frontmatter example:**
+
+```yaml
+---
+title: "My Article"
+tldr: "A one-sentence summary of the key insight."
+key_takeaways:
+  - Point one
+  - Point two
+---
+```
+
+**Scaffold shortcodes** — `shortcodes/tldr.html` and `shortcodes/takeaways.html`
+provide visible rendering wrappers:
+
+```markdown
+{{< tldr >}}A one-sentence summary.{{< /tldr >}}
+
+{{< takeaways >}}
+- Point one
+- Point two
+{{< /takeaways >}}
+```
+
 ### Authors Options
 
 When `authors.enabled = true`, C-Static loads `.md` files from `authors.dir` (default `src/authors`) into an author index. Each file's stem is the **slug** referenced by page frontmatter `author: <slug>`. The filename `src/authors/jane-doe.md` → slug `jane-doe`.

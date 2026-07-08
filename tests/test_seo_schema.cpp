@@ -531,3 +531,63 @@ TEST_CASE("seo_schema: no passages -> no hasPart key", "[seo_schema]") {
     nlohmann::json s = extract_script(out, 1);
     REQUIRE_FALSE(s.contains("hasPart"));
 }
+
+// --- G9: TL;DR / Key Takeaways ---
+
+TEST_CASE("seo_schema: tldr overrides description in schema", "[seo_schema]") {
+    Config cfg = base_config();
+    auto page = make_page("Hello", "/posts/hello/", "2025-01-01");
+    page["description"] = "Long description.";
+    page["excerpt"] = "Excerpt text.";
+    page["tldr"] = "Short summary.";
+    std::string out = build_json_ld(cfg, page, nlohmann::json::array());
+    nlohmann::json s = extract_script(out, 1);
+    REQUIRE(s["description"] == "Short summary.");
+}
+
+TEST_CASE("seo_schema: description used when no tldr", "[seo_schema]") {
+    Config cfg = base_config();
+    auto page = make_page("Hello", "/posts/hello/", "2025-01-01");
+    page["description"] = "The description.";
+    page["excerpt"] = "The excerpt.";
+    std::string out = build_json_ld(cfg, page, nlohmann::json::array());
+    nlohmann::json s = extract_script(out, 1);
+    REQUIRE(s["description"] == "The description.");
+}
+
+TEST_CASE("seo_schema: key_takeaways populate mainEntity ItemList", "[seo_schema]") {
+    Config cfg = base_config();
+    auto page = make_page("Hello", "/posts/hello/", "2025-01-01");
+    page["key_takeaways"] = {"First point", "Second point", "Third point"};
+    std::string out = build_json_ld(cfg, page, nlohmann::json::array());
+    nlohmann::json s = extract_script(out, 1);
+    REQUIRE(s.contains("mainEntity"));
+    REQUIRE(s["mainEntity"]["@type"] == "ItemList");
+    REQUIRE(s["mainEntity"]["itemListElement"].size() == 3);
+    REQUIRE(s["mainEntity"]["itemListElement"][0]["@type"] == "ListItem");
+    REQUIRE(s["mainEntity"]["itemListElement"][0]["position"] == 1);
+    REQUIRE(s["mainEntity"]["itemListElement"][0]["name"] == "First point");
+    REQUIRE(s["mainEntity"]["itemListElement"][2]["position"] == 3);
+    REQUIRE(s["mainEntity"]["itemListElement"][2]["name"] == "Third point");
+}
+
+TEST_CASE("seo_schema: no key_takeaways -> no mainEntity key", "[seo_schema]") {
+    Config cfg = base_config();
+    auto page = make_page("P", "/p/", "2025-01-01");
+    std::string out = build_json_ld(cfg, page, nlohmann::json::array());
+    nlohmann::json s = extract_script(out, 1);
+    REQUIRE_FALSE(s.contains("mainEntity"));
+}
+
+TEST_CASE("seo_schema: explicit schema.mainEntity overrides key_takeaways",
+          "[seo_schema]") {
+    Config cfg = base_config();
+    auto page = make_page("P", "/p/", "2025-01-01");
+    page["key_takeaways"] = {"Auto point"};
+    page["schema"] = nlohmann::json::object();
+    page["schema"]["mainEntity"] = nlohmann::json{{"@type", "Thing"}, {"name", "Manual"}};
+    std::string out = build_json_ld(cfg, page, nlohmann::json::array());
+    nlohmann::json s = extract_script(out, 1);
+    REQUIRE(s["mainEntity"]["@type"] == "Thing");
+    REQUIRE(s["mainEntity"]["name"] == "Manual");
+}

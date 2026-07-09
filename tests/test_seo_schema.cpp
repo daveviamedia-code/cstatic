@@ -11,9 +11,11 @@
 using cstatic::Config;
 using cstatic::modules::seo_schema::build_citation_tags;
 using cstatic::modules::seo_schema::build_json_ld;
+using cstatic::modules::seo_schema::build_org_context;
 using cstatic::modules::seo_schema::build_organization_script;
 using cstatic::modules::seo_schema::build_website_script;
 using cstatic::modules::seo_schema::validate;
+using cstatic::modules::seo_schema::validate_organization;
 
 namespace {
 
@@ -590,4 +592,127 @@ TEST_CASE("seo_schema: explicit schema.mainEntity overrides key_takeaways",
     nlohmann::json s = extract_script(out, 1);
     REQUIRE(s["mainEntity"]["@type"] == "Thing");
     REQUIRE(s["mainEntity"]["name"] == "Manual");
+}
+
+// --- G10: Brand Mention Normalization ---
+
+TEST_CASE("seo_schema: validate_organization empty when org_name unset", "[seo_schema]") {
+    Config cfg = base_config();
+    REQUIRE(validate_organization(cfg, {}).empty());
+}
+
+TEST_CASE("seo_schema: validate_organization clean with matching name + URL logo",
+          "[seo_schema]") {
+    Config cfg = base_config();
+    cfg.org_name = "My Site";  // matches site_title
+    cfg.org_logo = "https://example.com/logo.png";  // absolute URL → no file check
+    cfg.org_same_as = {"https://twitter.com/mysite", "https://github.com/mysite"};
+    cfg.org_founders = {"alice"};
+    REQUIRE(validate_organization(cfg, {"alice", "bob"}).empty());
+}
+
+TEST_CASE("seo_schema: validate_organization warns org_name differs from site_title",
+          "[seo_schema]") {
+    Config cfg = base_config();
+    cfg.org_name = "Acme Inc";
+    cfg.org_logo = "https://example.com/logo.png";
+    auto issues = validate_organization(cfg, {});
+    REQUIRE(issues.size() == 1);
+    REQUIRE(issues[0].field == "org_name");
+    REQUIRE(contains(issues[0].message, "Acme Inc"));
+    REQUIRE(contains(issues[0].message, "My Site"));
+}
+
+TEST_CASE("seo_schema: validate_organization warns org_logo file not found",
+          "[seo_schema]") {
+    Config cfg = base_config();
+    cfg.org_name = "My Site";
+    cfg.static_dir = "/nonexistent_static_dir";
+    cfg.org_logo = "/missing-logo.png";
+    auto issues = validate_organization(cfg, {});
+    bool found = false;
+    for (const auto& i : issues) {
+        if (i.field == "org_logo") {
+            REQUIRE(contains(i.message, "file not found"));
+            found = true;
+        }
+    }
+    REQUIRE(found);
+}
+
+TEST_CASE("seo_schema: validate_organization warns same_as not URL", "[seo_schema]") {
+    Config cfg = base_config();
+    cfg.org_name = "My Site";
+    cfg.org_logo = "https://example.com/logo.png";
+    cfg.org_same_as = {"https://valid.com", "not-a-url", "also-bad"};
+    auto issues = validate_organization(cfg, {});
+    int count = 0;
+    for (const auto& i : issues) {
+        if (i.field.find("org_same_as") == 0) {
+            REQUIRE(contains(i.message, "not a valid URL"));
+            ++count;
+        }
+    }
+    REQUIRE(count == 2);  // two bad entries
+}
+
+TEST_CASE("seo_schema: validate_organization warns founders not known slugs",
+          "[seo_schema]") {
+    Config cfg = base_config();
+    cfg.org_name = "My Site";
+    cfg.org_logo = "https://example.com/logo.png";
+    cfg.org_founders = {"alice", "charlie"};  // alice known, charlie not
+    auto issues = validate_organization(cfg, {"alice", "bob"});
+    bool found = false;
+    for (const auto& i : issues) {
+        if (i.field == "org_founders" && contains(i.message, "charlie")) {
+            found = true;
+        }
+    }
+    REQUIRE(found);
+}
+
+TEST_CASE("seo_schema: validate_organization skips founders check when no authors",
+          "[seo_schema]") {
+    Config cfg = base_config();
+    cfg.org_name = "My Site";
+    cfg.org_logo = "https://example.com/logo.png";
+    cfg.org_founders = {"unknown-person"};
+    // Empty known_author_slugs → founders check is skipped entirely.
+    REQUIRE(validate_organization(cfg, {}).empty());
+}
+
+TEST_CASE("seo_schema: build_org_context empty when org_name unset", "[seo_schema]") {
+    Config cfg = base_config();
+    nlohmann::json org = build_org_context(cfg);
+    REQUIRE(org.is_object());
+    REQUIRE(org.empty());
+}
+
+TEST_CASE("seo_schema: build_org_context has all fields", "[seo_schema]") {
+    Config cfg = base_config();
+    cfg.org_name = "Acme Inc";
+    cfg.org_legal_name = "Acme Incorporated";
+    cfg.org_logo = "/logo.png";
+    cfg.org_founding_date = "2001-02-03";
+    cfg.org_founders = {"Alice", "Bob"};
+    cfg.org_same_as = {"https://twitter.com/acme"};
+    cfg.org_url = "https://acme.example.com";
+
+    nlohmann::json org = build_org_context(cfg);
+    REQUIRE(org["name"] == "Acme Inc");
+    REQUIRE(org["legal_name"] == "Acme Incorporated");
+    REQUIRE(org["logo_url"] == "https://example.com/logo.png");
+    REQUIRE(org["founding_date"] == "2001-02-03");
+    REQUIRE(org["url"] == "https://acme.example.com");
+    REQUIRE(org["founders"].size() == 2);
+    REQUIRE(org["founders"][0] == "Alice");
+    REQUIRE(org["same_as"][0] == "https://twitter.com/acme");
+}
+
+TEST_CASE("seo_schema: build_org_context url defaults to base_url", "[seo_schema]") {
+    Config cfg = base_config();
+    cfg.org_name = "My Site";
+    nlohmann::json org = build_org_context(cfg);
+    REQUIRE(org["url"] == "https://example.com");  // falls back to site_base_url
 }

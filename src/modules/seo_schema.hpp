@@ -19,6 +19,12 @@ struct SchemaIssue {
     std::string message;
 };
 
+// G10: A validation issue against the site-wide Organization identity.
+struct OrgIssue {
+    std::string field;   // e.g. "org_name", "org_logo", "org_same_as[0]", "org_founders"
+    std::string message;
+};
+
 // Returns concatenated <script type="application/ld+json"> blocks for one
 // page: WebSite + Organization (if configured) + page schema +
 // BreadcrumbList (for nested pages) + each schema_extra entry. Empty string
@@ -52,6 +58,21 @@ std::vector<SchemaIssue> validate(const nlohmann::json& page_schema,
 //   page   title/url/date/description/tags +
 //          custom frontmatter (author, pdf_url, journal, doi, tldr)
 std::string build_citation_tags(const Config& cfg, const nlohmann::json& page);
+
+// G10: Validate the site-wide Organization identity for consistency. Returns
+// non-fatal issues. Checks: org_name vs site_title divergence, org_logo file
+// existence (when not an absolute URL), same_as URL format, and org_founders
+// references against known author slugs. known_author_slugs may be empty (the
+// founders check is skipped). Returns an empty list when org_name is unset.
+std::vector<OrgIssue> validate_organization(const Config& cfg,
+                                             const std::vector<std::string>& known_author_slugs);
+
+// G10: Template-friendly Organization context for {{ org }}. Returns an empty
+// object when org_name is unset. Derived from the same cfg fields as the
+// JSON-LD schema so there is a single source of truth. Keys: name, url,
+// legal_name, logo_url, founding_date, founders[], same_as[] (only the
+// non-empty ones are included).
+nlohmann::json build_org_context(const Config& cfg);
 
 } // namespace seo_schema
 } // namespace modules

@@ -174,7 +174,29 @@ C-Static can generate a sitemap, RSS feed, JSON Feed, robots.txt, and per-page s
     ---
     ```
 
-12. **Build:** `cstatic build`.
+12. **Brand mention normalization (automatic when `org_name` is set).** When you configure `seo.org_name`, C-Static validates the Organization identity once per build and exposes `{{ site.org }}` so footers, contact blocks, and about pages all render from a single source of truth — no duplicated name/logo/URL strings across templates.
+
+    Validation checks (non-fatal `warn:` on stderr; doesn't fail the build):
+    - `org_name` diverging from `site_title` (informational — intentional when the org and site have different names).
+    - `org_logo` local-path file not found under `static_dir` (absolute URLs starting with `https://` or `http://` are skipped).
+    - `org_same_as` entries that don't look like URLs (no `://`).
+    - `org_founders` entries that don't match a known author slug (checked only when `authors.enabled = true` and the index is non-empty).
+
+    `{{ site.org }}` template object (only non-empty fields included):
+
+    ```html
+    <footer>
+      {% if site.org.name %}
+      <p>{{ site.org.name }} &mdash; founded {{ site.org.founding_date }}</p>
+      <img src="{{ site.org.logo_url }}" alt="{{ site.org.name }} logo">
+      {% for link in site.org.same_as %}
+      <a href="{{ link }}">{{ link }}</a>
+      {% endfor %}
+      {% endif %}
+    </footer>
+    ```
+
+13. **Build:** `cstatic build`.
 
 ## Gotchas
 
@@ -190,3 +212,4 @@ C-Static can generate a sitemap, RSS feed, JSON Feed, robots.txt, and per-page s
 - **Author files are entities, not pages**: when `authors.enabled = true`, `src/authors/*.md` are loaded into the author index and **excluded** from the regular markdown page collection. Don't expect them to appear in `{{ pages }}` or render with the default template — they render via `templates/author.html` at `/<slug>/`.
 - **Passage IDs are slugified from heading text**: cmark-gfm doesn't emit `id="…"` attributes on `<hN>` tags by default, so `#passage-id` anchor links won't resolve out of the box today. The `hasPart[].url` JSON-LD field uses the slugified heading text directly so the targets are *named* and stable. A future G11 (auto TOC) release will inject matching `id="..."` attributes into the rendered HTML using the same shared `utils::slugify` algorithm — at which point the JSON-LD anchor targets will also start resolving in browsers.
 - **`json_ld_enabled` is under `[seo]`, not `[modules]`**: the scaffold's commented hint sits under `[modules]` but the real key is `seo.json_ld_enabled`. The `[authors]` table is separate and gates only the author entity system (resolution + profile pages), independent of JSON-LD.
+- **Brand validation is always on when `org_name` is set** — no separate flag to enable/suppress. Warnings are non-fatal (print to stderr, don't fail the build). The `{{ site.org }}` variable (not top-level `{{ org }}`) is available in all templates when `org_name` is non-empty, regardless of `json_ld_enabled`.

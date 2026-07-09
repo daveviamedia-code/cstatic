@@ -650,7 +650,7 @@ are surfaced as non-fatal `warn:` lines on stderr.
 | `seo.json_ld_enabled` | bool | `false` | Emit JSON-LD structured-data blocks (opt-in; off preserves existing output) |
 | `seo.org_name` | string | `""` | Organization name; setting it enables the site-wide Organization schema |
 | `seo.org_legal_name` | string | `""` | Legal name (emitted as `legalName`) |
-| `seo.org_logo` | string | `""` | Logo URL (relative `/`-paths prefixed with `base_url`) |
+| `seo.org_logo` | string | `""` | Logo URL (relative `/`-paths prefixed with `base_url`; local paths are validated against `static_dir` — see Brand Mention Normalization below) |
 | `seo.org_founding_date` | string | `""` | `foundingDate` (e.g. `"2015-01-01"`) |
 | `seo.org_founders` | string[] | `[]` | Each becomes `{@type:Person, name}` under `founder` |
 | `seo.org_same_as` | string[] | `[]` | `sameAs` array of profile URLs |
@@ -666,6 +666,39 @@ org_founding_date = "2015-01-01"
 org_founders = ["Alice", "Bob"]
 org_same_as = ["https://twitter.com/acme", "https://github.com/acme"]
 website_search_url_template = "/search?q={search_term_string}"
+```
+
+### Brand Mention Normalization
+
+When `seo.org_name` is set, C-Static validates the Organization identity once
+per build (non-fatal `warn:` on stderr) and exposes a `{{ site.org }}` template
+variable so every footer, contact card, and about block renders from a single
+source of truth.
+
+**Validation checks** (always on when `org_name` is non-empty):
+
+| Check | Warning condition |
+|-------|-------------------|
+| `org_name` vs `site_title` | Diverges from `site_title` (informational — intentional when the organization and site have different names) |
+| `org_logo` | Local path (not an absolute URL) whose file doesn't exist under `static_dir` |
+| `org_same_as[N]` | Entry doesn't look like a URL (no `://`) |
+| `org_founders` | Entry doesn't match a known author slug (checked only when `authors.enabled = true` and the index is non-empty) |
+
+**Template variable** — `{{ site.org }}` provides a template-friendly object
+mirroring the JSON-LD fields: `name`, `url`, `legal_name`, `logo_url` (resolved
+against `base_url`), `founding_date`, `founders` (string array), `same_as`
+(string array). Only non-empty fields are included. The object is empty when
+`org_name` is unset.
+
+```html
+<footer>
+  {% if site.org.name %}
+  <p>{{ site.org.name }} — founded {{ site.org.founding_date }}</p>
+  {% for link in site.org.same_as %}
+  <a href="{{ link }}">{{ link }}</a>
+  {% endfor %}
+  {% endif %}
+</footer>
 ```
 
 ### Passage Index

@@ -185,6 +185,8 @@ In every layout's `<head>`, add `{{ seo_meta }}` — it emits description, Open 
 
 **E-E-A-T author entities** (`authors.enabled = true`). Author `.md` files under `authors.dir` (default `src/authors`) become first-class entities. The filename stem is the slug; page frontmatter `author: <slug>` resolves to a full author object exposed as `{{ page.author }}` (name, title, bio, avatar, social links, expertise) and a Schema.org `Person` JSON-LD object. Each author gets a generated profile page at `/<authors_dir_basename>/<slug>/` rendered with `templates/author.html` (template receives `{{ author }}` with a `.posts` array). The full roster is available as `{{ site.authors }}`. Author files are **excluded** from the regular markdown page collection — they are entities, not content pages. Author frontmatter: `name`, `title`, `bio`, `avatar`, `email`, `twitter`, `linkedin`, `github`, `website`, `same_as[]`, `expertise[]`. See `docs/config.md` → Authors Options.
 
+**Brand mention normalization** (no config flag; automatic when `org_name` is set). When `seo.org_name` is non-empty, C-Static validates the Organization identity once per build and exposes `{{ site.org }}` so footers, contact blocks, and about pages all render from a single source of truth. Validation checks (non-fatal `warn:` on stderr): `org_name` diverging from `site_title` (informational), `org_logo` local-path file not found under `static_dir` (absolute URLs skipped), `org_same_as` entries that aren't URLs, and `org_founders` entries that don't match a known author slug (checked only when `authors.enabled = true`). The `{{ site.org }}` object mirrors the JSON-LD fields in a template-friendly shape: `name`, `url`, `legal_name`, `logo_url`, `founding_date`, `founders` (string[]), `same_as` (string[]) — only non-empty fields included.
+
 ### 5.7 Add data-driven pages
 
 ```toml
@@ -237,7 +239,7 @@ Full reference: `docs/config.md`. Most-used keys:
 | `[build.markdown]` | `extensions`, `shortcodes_dir`, `wikilinks` | all ext / `shortcodes` / `false` | `extensions` ∈ `table`,`tasklist`,`strikethrough`,`autolink`. |
 | `[modules]` | `sitemap`, `rss`, `json_feed`, `robots`, `llms_txt` | `T`/`F`/`F`/`F`/`F` | Plus `rss_title`/`rss_description`/`rss_item_count`, `json_feed_output`, `llms_txt_description`/`llms_txt_max_pages`/`llms_txt_exclude`, `robots_*` (incl. `robots_ai_crawlers_mode` ∈ `off`\|`allow`\|`disallow`\|`custom` + `robots_ai_crawlers_custom`). `llms_txt` writes `/llms.txt` + `/llms-full.txt`; summary falls back to `site.description`. |
 | `[og_images]` | `enabled`, `template`, `output_format`, `width`, `height`, `output_dir` | `F`/`og-default`/`png`/`1200`/`630`/`og` | PNG needs rsvg-convert/convert/inkscape. |
-| `[seo]` | `json_ld_enabled` + `citation_tags_enabled` + `org_*` + `website_search_url_template` | `F` / empty | JSON-LD structured data. `org_name` enables Organization schema; `website_search_url_template` adds WebSite SearchAction. `citation_tags_enabled` emits `citation_*` meta tags (Scholar/Perplexity/ChatGPT) — reads `pdf_url`/`journal`/`doi`/`tldr`/`created` from custom frontmatter. |
+| `[seo]` | `json_ld_enabled` + `citation_tags_enabled` + `org_*` + `website_search_url_template` | `F` / empty | JSON-LD structured data. `org_name` enables Organization schema (and brand-mention validation: logo file existence, same_as URL format, founders vs author slugs); `website_search_url_template` adds WebSite SearchAction. `citation_tags_enabled` emits `citation_*` meta tags (Scholar/Perplexity/ChatGPT) — reads `pdf_url`/`journal`/`doi`/`tldr`/`created` from custom frontmatter. `{{ site.org }}` exposes the resolved org object when `org_name` is set. |
 | `[authors]` | `enabled`, `dir` | `F`, `src/authors` | E-E-A-T author entities. Loads `<dir>/<slug>.md`; page `author: <slug>` resolves to `{{ page.author }}` + Person JSON-LD. Generates profile pages at `/<dir_base>/<slug>/`. |
 | `[sitemap]` | `exclude` | `[]` | URL paths to drop. |
 | `[data]` | `data_dir` | `_data` | |
@@ -279,7 +281,7 @@ Any extra field becomes `page.<field_name>` in templates. Commerce fields (`bran
 
 | Variable | Description |
 |----------|-------------|
-| `site` | Site config: `title`, `base_url`, `language`, `env` (current env name), `twitter_handle`, and `authors` (map of slug→author object, when `authors.enabled = true`). |
+| `site` | Site config: `title`, `base_url`, `language`, `env` (current env name), `twitter_handle`, `org` (normalized organization object when `org_name` is set — see Brand Mention Normalization), and `authors` (map of slug→author object, when `authors.enabled = true`). |
 | `page` | Current page: `title`, `url`, `content`, `date`, `tags`, `excerpt`, `passages` (`[{id, heading, text, level}]`), plus any extra frontmatter. Gains `backlinks` when wikilinks are on. Gains `faq` (`[{question, answer_html, answer_text}]`) when standalone `##?` questions are present. `page.author` is a resolved object (name, title, bio, …) when `authors.enabled = true` and the slug matches a loaded author. |
 | `author` | On generated author profile pages (`/<authors_dir>/<slug>/`): the author object plus `.posts` (their published pages). `page.type` is `"ProfilePage"`. |
 | `pages` | All pages, sorted by date (newest first). Excludes drafts, future-scheduled, and alias redirect stubs. |

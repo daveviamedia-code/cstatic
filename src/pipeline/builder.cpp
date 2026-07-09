@@ -550,6 +550,22 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         }
     }
 
+    // G10: expose the resolved Organization object as {{ org }} so templates
+    // can render consistent footers/cards from a single source of truth.
+    site_ctx["org"] = modules::seo_schema::build_org_context(cfg);
+
+    // G10: validate organization identity once per build (non-fatal warnings).
+    if (!cfg.org_name.empty()) {
+        std::vector<std::string> known_slugs;
+        if (cfg.authors_enabled) {
+            for (const auto& s : authors_index.all_slugs()) known_slugs.push_back(s);
+        }
+        for (const auto& issue : modules::seo_schema::validate_organization(cfg, known_slugs)) {
+            std::cerr << utils::warning_label() << " org '" << issue.field
+                      << "': " << issue.message << "\n";
+        }
+    }
+
     // Markdown rendering options (syntax highlighting + GFM extensions).
     MarkdownOptions md_opts;
     md_opts.highlight_enabled = cfg.highlight_enabled;

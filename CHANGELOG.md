@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-07-09
+
+### Added
+- Brand mention normalization (G10). When `seo.org_name` is set, C-Static now validates the Organization identity once per build and exposes a `{{ site.org }}` template variable so footers, author cards, and contact blocks all render from a single source of truth. Validation checks (non-fatal `warn:` on stderr): `org_name` diverging from `site_title` (informational — intentional when the organization and site have different names), `org_logo` pointing to a file that doesn't exist under `static_dir` (local paths only; absolute URLs are skipped), `org_same_as` entries that aren't valid URLs, and `org_founders` entries that don't match a known author slug (checked only when `authors.enabled = true` and the index is non-empty). The `{{ site.org }}` template object mirrors the JSON-LD Organization fields in a template-friendly shape: `name`, `url`, `legal_name`, `logo_url`, `founding_date`, `founders` (string array), `same_as` (string array) — only non-empty fields are included. No new config flag (validation is always on when `org_name` is set); backwards-compatible — existing builds without `org_name` are unaffected.
+
 ## [0.12.0] - 2026-07-08
 
 ### Added

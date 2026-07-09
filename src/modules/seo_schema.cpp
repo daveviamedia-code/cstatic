@@ -6,6 +6,7 @@
 #include <nlohmann/json.hpp>
 #include <algorithm>
 #include <cctype>
+#include <filesystem>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -13,6 +14,8 @@
 namespace cstatic {
 namespace modules {
 namespace seo_schema {
+
+namespace fs = std::filesystem;
 
 namespace {
 
@@ -675,6 +678,75 @@ std::string build_citation_tags(const Config& cfg, const nlohmann::json& page) {
     }
 
     return out.str();
+}
+
+std::vector<OrgIssue> validate_organization(const Config& cfg,
+                                             const std::vector<std::string>& known_author_slugs) {
+    std::vector<OrgIssue> issues;
+    if (cfg.org_name.empty()) return issues;
+
+    // 1. org_name vs site_title — informational (intentional sometimes).
+    if (!cfg.site_title.empty() && cfg.org_name != cfg.site_title) {
+        issues.push_back({"org_name",
+            "'" + cfg.org_name + "' differs from site_title ('" + cfg.site_title +
+            "') — intentional if the organization and site have different names"});
+    }
+
+    // 2. org_logo — file-existence check when it's a local path (not a URL).
+    if (!cfg.org_logo.empty() && cfg.org_logo.find("://") == std::string::npos) {
+        std::string rel = cfg.org_logo;
+        if (!rel.empty() && rel.front() == '/') rel.erase(rel.begin());
+        std::string logo_path = cfg.static_dir + "/" + rel;
+        if (!fs::exists(logo_path)) {
+            issues.push_back({"org_logo",
+                "file not found at '" + logo_path + "' (resolved relative to static_dir)"});
+        }
+    }
+
+    // 3. same_as entries — each should be an http(s) URL.
+    for (size_t i = 0; i < cfg.org_same_as.size(); ++i) {
+        const std::string& s = cfg.org_same_as[i];
+        if (s.find("://") == std::string::npos) {
+            issues.push_back({"org_same_as[" + std::to_string(i) + "]",
+                "'" + s + "' is not a valid URL (expected http:// or https://)"});
+        }
+    }
+
+    // 4. org_founders — warn when a founder doesn't match a known author slug.
+    //    Only checked when the authors index is enabled and non-empty.
+    if (!known_author_slugs.empty()) {
+        for (const auto& f : cfg.org_founders) {
+            if (std::find(known_author_slugs.begin(), known_author_slugs.end(), f)
+                == known_author_slugs.end()) {
+                issues.push_back({"org_founders",
+                    "'" + f + "' does not match a known author slug"});
+            }
+        }
+    }
+
+    return issues;
+}
+
+nlohmann::json build_org_context(const Config& cfg) {
+    nlohmann::json org = nlohmann::json::object();
+    if (cfg.org_name.empty()) return org;
+
+    org["name"] = cfg.org_name;
+    org["url"] = cfg.org_url.empty() ? cfg.site_base_url : cfg.org_url;
+    if (!cfg.org_legal_name.empty()) org["legal_name"] = cfg.org_legal_name;
+    if (!cfg.org_logo.empty()) org["logo_url"] = resolve_url(cfg.site_base_url, cfg.org_logo);
+    if (!cfg.org_founding_date.empty()) org["founding_date"] = cfg.org_founding_date;
+    if (!cfg.org_founders.empty()) {
+        nlohmann::json founders = nlohmann::json::array();
+        for (const auto& f : cfg.org_founders) founders.push_back(f);
+        org["founders"] = std::move(founders);
+    }
+    if (!cfg.org_same_as.empty()) {
+        nlohmann::json same_as = nlohmann::json::array();
+        for (const auto& s : cfg.org_same_as) same_as.push_back(s);
+        org["same_as"] = std::move(same_as);
+    }
+    return org;
 }
 
 } // namespace seo_schema

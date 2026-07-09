@@ -351,7 +351,7 @@ These shortcodes set `page.tldr`/`page.key_takeaways` in page context before ren
 
 ---
 
-### G10. Brand Mention Normalization
+### G10. Brand Mention Normalization   DONE
 
 **Approach**: Single source of truth for organization identity, applied consistently across every page. Already partially specified in G3's `[seo.organization]` block — this feature completes it with a verification pass.
 

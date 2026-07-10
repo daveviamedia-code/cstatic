@@ -151,7 +151,7 @@ TEST_CASE("Passage index extraction", "[passage_index]") {
         auto passages = extract_passages(html);
         REQUIRE(passages.size() == 1);
         REQUIRE(passages[0].heading == "Named");
-        // slug comes from heading text, not the id attr (G11 will align these later).
+        // slug comes from heading text; G11 (auto TOC) injects matching ids.
         REQUIRE(passages[0].id == "named");
     }
 }

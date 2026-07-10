@@ -749,9 +749,43 @@ engines to cite the specific section. An explicit `page.schema.hasPart` in
 frontmatter overrides the auto-generated array (deep-merge semantics).
 
 > **Note**: cmark-gfm doesn't emit `id="…"` attributes on heading tags by
-> default. The `url` field above uses the slugified heading text directly.
-> A future G11 (auto TOC) release will inject matching `id` attributes so
-> in-page anchor links resolve — they'll share the same slugify algorithm.
+> default. G11 (auto TOC, see below) injects matching `id` attributes so
+> in-page anchor links resolve — they share the same slugify algorithm.
+
+### Auto Table of Contents
+
+C-Static automatically builds a **table of contents** from every page's
+`<h2>`–`<h6>` headings and injects `id="..."` attributes into those tags so
+`#anchor` links resolve in browsers (cmark-gfm doesn't emit IDs by default).
+This is pure derived metadata (like `excerpt`), so it is always on regardless
+of config.
+
+**`{{ page.toc }}`** — A nested tree of `{id, text, level, children}` entries.
+Each entry corresponds to one heading; `children` contains sub-headings nested
+beneath it. `id` is the slugified heading text (collisions get `-1`, `-2`, …
+suffixes, matching G8 passage IDs exactly). Use this in templates for custom
+TOC rendering:
+
+```html
+{% if page.toc %}
+<nav class="toc">
+  <ul>
+  {% for entry in page.toc %}
+    <li class="level-{{ entry.level }}"><a href="#{{ entry.id }}">{{ entry.text }}</a></li>
+  {% endfor %}
+  </ul>
+</nav>
+{% endif %}
+```
+
+**`<!--toc-->` marker** — Insert `<!--toc-->` (or `<!-- toc -->` with spaces)
+anywhere in your markdown content and C-Static replaces it with a rendered
+`<nav class="toc"><ul>…</ul></nav>` after the TOC tree is built. The rendered
+nav uses `<li class="toc-level-N">` entries with nested `<ul>`s for child
+headings.
+
+Headings that already have an `id` attribute (e.g. from raw HTML in your
+markdown) are preserved verbatim — no duplicate ID is injected.
 
 ### Citation Tags
 

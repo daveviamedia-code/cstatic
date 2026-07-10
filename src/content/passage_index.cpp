@@ -94,9 +94,8 @@ std::vector<Passage> extract_passages(const std::string& html) {
         std::string raw_heading = utils::strip_html_tags(hm.inner);
         p.heading = collapse_ws(raw_heading);
 
-        // ID: slugify the heading text. cmark-gfm doesn't emit id attrs by
-        // default; G11 will later inject matching id attrs using this same
-        // util so anchor links line up.
+        // ID: slugify the heading text. G11 (auto TOC) injects matching
+        // id attrs using this same util so anchor links line up.
         std::string slug = utils::slugify(p.heading);
         if (slug.empty()) {
             // Heading was entirely punctuation/whitespace — synthesize a

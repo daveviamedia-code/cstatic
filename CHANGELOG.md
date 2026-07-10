@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-07-10
+
+### Added
+- Auto Table of Contents (G11). C-Static now injects `id="..."` attributes into `<h2>`–`<h6>` heading tags (cmark-gfm doesn't emit them by default) and builds a `{{ page.toc }}` nested tree for template rendering. IDs use the same `utils::slugify` as G8 (passage index) so anchor links, passage `hasPart` URLs, and heading `id` attributes all stay in sync — `#introduction` resolves to `<h2 id="introduction">`. Duplicate headings get `-1`, `-2`, … suffixes (matching G8 exactly). Headings that already have an `id` attribute are preserved. Insert a `<!--toc-->` (or `<!-- toc -->`) marker anywhere in markdown content and C-Static replaces it with a rendered `<nav class="toc"><ul>…</ul></nav>` after the TOC tree is built. The tree handles skip-level nesting (h2 → h4 nests the h4 directly under the h2). Always on (pure derived metadata, like `excerpt`); no config flag needed.
+
 ## [0.13.0] - 2026-07-09
 
 ### Added

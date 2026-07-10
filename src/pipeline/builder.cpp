@@ -6,6 +6,7 @@
 #include "content/link_graph.hpp"
 #include "content/markdown.hpp"
 #include "content/passage_index.hpp"
+#include "content/toc.hpp"
 #include "content/schema_blocks.hpp"
 #include "content/shortcodes.hpp"
 #include "data/data_loader.hpp"
@@ -844,6 +845,21 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
             auto passages = extract_passages(rp.html_content);
             if (!passages.empty()) {
                 rp.parsed.frontmatter.custom["passages"] = to_json(passages);
+            }
+        }
+
+        // G11: Auto Table of Contents. Inject id="..." attributes into
+        // headings (so #anchor links resolve — cmark-gfm doesn't emit them)
+        // and build a {{ page.toc }} tree. IDs use the same slugify as G8
+        // so passage hasPart URLs and heading anchors stay in sync.
+        // Also replaces <!--toc--> markers with rendered nav HTML.
+        // Always on (pure derived data). Runs AFTER render_markdown and
+        // AFTER G8 so passage IDs are already computed from the same HTML.
+        {
+            auto toc = build_toc(rp.html_content);
+            if (!toc.empty()) {
+                rp.parsed.frontmatter.custom["toc"] = to_json(toc);
+                replace_toc_markers(rp.html_content, toc);
             }
         }
 

@@ -369,7 +369,7 @@ These shortcodes set `page.tldr`/`page.key_takeaways` in page context before ren
 
 ---
 
-### G11. Auto Table of Contents
+### G11. Auto Table of Contents   DONE
 
 **Approach**: Generate stable anchor IDs from headings and a `page.toc` tree. Pairs with G8 (passages share IDs). Improves on-page UX and Perplexity passage linking.
 

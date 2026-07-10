@@ -159,7 +159,27 @@ C-Static can generate a sitemap, RSS feed, JSON Feed, robots.txt, and per-page s
     - When `seo.json_ld_enabled = true` (step 1), each passage is also emitted as a `WebPageElement` under the page schema's `hasPart`, with `url = <canonical or base_url + page.url>#<id>` — AI engines get machine-readable passage boundaries + anchor targets.
     - An explicit `page.schema.hasPart` in frontmatter overrides the auto-generated array (deep-merge).
 
-11. **TL;DR / Key Takeaways (automatic — nothing to enable).** Two frontmatter fields improve AI citability:
+11. **Auto TOC (automatic — nothing to enable).** C-Static injects `id="..."` attributes into `<h2>`–`<h6>` tags (cmark-gfm doesn't emit them) and builds `{{ page.toc }}` — a nested tree of `{id, text, level, children: [...]}`. IDs use the same slugify as passage index, so `#anchor` links and passage `hasPart` URLs resolve to the same heading.
+
+    - Insert `<!--toc-->` (or `<!-- toc -->`) anywhere in your markdown to render a `<nav class="toc"><ul>…</ul></nav>` at that position.
+    - Or use `{{ page.toc }}` in templates for custom TOC rendering:
+
+    ```html
+    {% if page.toc %}
+    <nav class="toc">
+    <ul>
+    {% for entry in page.toc %}
+      <li class="level-{{ entry.level }}"><a href="#{{ entry.id }}">{{ entry.text }}</a></li>
+    {% endfor %}
+    </ul>
+    </nav>
+    {% endif %}
+    ```
+
+    - Duplicate headings get `-1`, `-2`, … suffixes (matching G8 passage IDs). Headings with existing `id` attributes are preserved.
+    - Skip-level nesting (h2 → h4) nests the h4 directly under the h2.
+
+12. **TL;DR / Key Takeaways (automatic — nothing to enable).** Two frontmatter fields improve AI citability:
     - `tldr` (string) — overrides `description`/`excerpt` as both the `<meta name="description">` and the JSON-LD schema `description`. Priority: tldr → description → excerpt.
     - `key_takeaways` (array of strings) — when non-empty and `seo.json_ld_enabled = true`, the page schema gains a `mainEntity` `ItemList` of `ListItem` entries (each with `position` + `name`). An explicit `page.schema.mainEntity` overrides it.
     - Both available as `{{ page.tldr }}` / `{{ page.key_takeaways }}`.
@@ -174,7 +194,7 @@ C-Static can generate a sitemap, RSS feed, JSON Feed, robots.txt, and per-page s
     ---
     ```
 
-12. **Brand mention normalization (automatic when `org_name` is set).** When you configure `seo.org_name`, C-Static validates the Organization identity once per build and exposes `{{ site.org }}` so footers, contact blocks, and about pages all render from a single source of truth — no duplicated name/logo/URL strings across templates.
+13. **Brand mention normalization (automatic when `org_name` is set).** When you configure `seo.org_name`, C-Static validates the Organization identity once per build and exposes `{{ site.org }}` so footers, contact blocks, and about pages all render from a single source of truth — no duplicated name/logo/URL strings across templates.
 
     Validation checks (non-fatal `warn:` on stderr; doesn't fail the build):
     - `org_name` diverging from `site_title` (informational — intentional when the org and site have different names).
@@ -196,7 +216,7 @@ C-Static can generate a sitemap, RSS feed, JSON Feed, robots.txt, and per-page s
     </footer>
     ```
 
-13. **Build:** `cstatic build`.
+14. **Build:** `cstatic build`.
 
 ## Gotchas
 
@@ -210,6 +230,6 @@ C-Static can generate a sitemap, RSS feed, JSON Feed, robots.txt, and per-page s
 - JSON-LD `page.schema` deep-merges: auto-generated fields (`headline`, `datePublished`, `author`, `image`, `url`...) are preserved; only the keys you list are overridden. Use `schema_extra` (array) when you need entirely separate top-level schemas (FAQ, Event, etc.).
 - **FAQ authoring shortcut**: `##? question` headings anywhere in a page (no `{% schema %}` wrapper needed) auto-build a `FAQPage` — visible `<details>` HTML inline + a `FAQPage` JSON-LD merged into `schema_extra` + a `{{ page.faq }}` array. Wraps with `{% schema "FAQPage" %}` are still supported and merge into the same single `FAQPage`. Standalone FAQ is terminal (answers run to the next `##?` or end of body) — place it last on the page.
 - **Author files are entities, not pages**: when `authors.enabled = true`, `src/authors/*.md` are loaded into the author index and **excluded** from the regular markdown page collection. Don't expect them to appear in `{{ pages }}` or render with the default template — they render via `templates/author.html` at `/<slug>/`.
-- **Passage IDs are slugified from heading text**: cmark-gfm doesn't emit `id="…"` attributes on `<hN>` tags by default, so `#passage-id` anchor links won't resolve out of the box today. The `hasPart[].url` JSON-LD field uses the slugified heading text directly so the targets are *named* and stable. A future G11 (auto TOC) release will inject matching `id="..."` attributes into the rendered HTML using the same shared `utils::slugify` algorithm — at which point the JSON-LD anchor targets will also start resolving in browsers.
+- **Passage IDs and TOC IDs are aligned**: both G8 (passage index) and G11 (auto TOC) use the same shared `utils::slugify` to generate heading IDs. G11 injects matching `id="..."` attributes into rendered `<h2>`–`<h6>` tags so `#passage-id` anchor links and JSON-LD `hasPart[].url` targets resolve in browsers. Headings with pre-existing `id` attributes are preserved by G11 (but G8 still computes from text — rare edge case).
 - **`json_ld_enabled` is under `[seo]`, not `[modules]`**: the scaffold's commented hint sits under `[modules]` but the real key is `seo.json_ld_enabled`. The `[authors]` table is separate and gates only the author entity system (resolution + profile pages), independent of JSON-LD.
 - **Brand validation is always on when `org_name` is set** — no separate flag to enable/suppress. Warnings are non-fatal (print to stderr, don't fail the build). The `{{ site.org }}` variable (not top-level `{{ org }}`) is available in all templates when `org_name` is non-empty, regardless of `json_ld_enabled`.

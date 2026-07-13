@@ -216,7 +216,22 @@ C-Static can generate a sitemap, RSS feed, JSON Feed, robots.txt, and per-page s
     </footer>
     ```
 
-14. **Build:** `cstatic build`.
+14. **Reading time / word count / difficulty (automatic — nothing to enable).** Every page gets three cheap computed fields derived from its rendered HTML, exposed as template variables:
+
+    ```html
+    <p class="meta">
+      {{ page.word_count }} words · {{ page.reading_time }} min read · {{ page.difficulty }}
+    </p>
+    ```
+
+    - `{{ page.word_count }}` (int) — whitespace-separated words + CJK ideographs (each CJK char counts as one word, since CJK text isn't whitespace-separated).
+    - `{{ page.reading_time }}` (int) — estimated minutes at 200 words/minute (`ceil(word_count / 200)`).
+    - `{{ page.difficulty }}` (string) — `"easy"`, `"moderate"`, `"difficult"`, `"very-difficult"` via the Flesch reading-ease heuristic, or empty string when not computable.
+    - `<pre>` and `<code>` blocks are stripped before counting — code isn't prose and would skew the syllable counter.
+    - Flesch difficulty is English-specific: CJK-dominated text (≥ half of counted words are CJK chars) yields an empty `difficulty` string.
+    - When `seo.json_ld_enabled = true` (step 1), Article-typed pages (BlogPosting/Article/NewsArticle/TechArticle) also emit `wordCount` on the JSON-LD schema, and any page with a reading time emits `timeRequired` as an ISO 8601 duration (`PT5M` = 5 minutes). Explicit `page.schema.wordCount` or `page.schema.timeRequired` in frontmatter overrides via deep-merge.
+
+15. **Build:** `cstatic build`.
 
 ## Gotchas
 
@@ -231,5 +246,5 @@ C-Static can generate a sitemap, RSS feed, JSON Feed, robots.txt, and per-page s
 - **FAQ authoring shortcut**: `##? question` headings anywhere in a page (no `{% schema %}` wrapper needed) auto-build a `FAQPage` — visible `<details>` HTML inline + a `FAQPage` JSON-LD merged into `schema_extra` + a `{{ page.faq }}` array. Wraps with `{% schema "FAQPage" %}` are still supported and merge into the same single `FAQPage`. Standalone FAQ is terminal (answers run to the next `##?` or end of body) — place it last on the page.
 - **Author files are entities, not pages**: when `authors.enabled = true`, `src/authors/*.md` are loaded into the author index and **excluded** from the regular markdown page collection. Don't expect them to appear in `{{ pages }}` or render with the default template — they render via `templates/author.html` at `/<slug>/`.
 - **Passage IDs and TOC IDs are aligned**: both G8 (passage index) and G11 (auto TOC) use the same shared `utils::slugify` to generate heading IDs. G11 injects matching `id="..."` attributes into rendered `<h2>`–`<h6>` tags so `#passage-id` anchor links and JSON-LD `hasPart[].url` targets resolve in browsers. Headings with pre-existing `id` attributes are preserved by G11 (but G8 still computes from text — rare edge case).
-- **`json_ld_enabled` is under `[seo]`, not `[modules]`**: the scaffold's commented hint sits under `[modules]` but the real key is `seo.json_ld_enabled`. The `[authors]` table is separate and gates only the author entity system (resolution + profile pages), independent of JSON-LD.
+- **`json_ld_enabled` is under `[seo]`, not `[modules]`**: the scaffold's commented hint correctly sits under the `[seo]` table; the reader key is `seo.json_ld_enabled`. The `[authors]` table is separate (`authors.enabled`) and gates only the author entity system (resolution + profile pages), independent of JSON-LD. (Older scaffolds misplaced the comment under `[modules]` — uncommenting it there silently did nothing.)
 - **Brand validation is always on when `org_name` is set** — no separate flag to enable/suppress. Warnings are non-fatal (print to stderr, don't fail the build). The `{{ site.org }}` variable (not top-level `{{ org }}`) is available in all templates when `org_name` is non-empty, regardless of `json_ld_enabled`.

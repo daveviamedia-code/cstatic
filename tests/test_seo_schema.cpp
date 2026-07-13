@@ -716,3 +716,62 @@ TEST_CASE("seo_schema: build_org_context url defaults to base_url", "[seo_schema
     nlohmann::json org = build_org_context(cfg);
     REQUIRE(org["url"] == "https://example.com");  // falls back to site_base_url
 }
+
+// --- G12: readability (wordCount + timeRequired) on JSON-LD ---
+
+TEST_CASE("seo_schema: BlogPosting emits wordCount and timeRequired", "[seo_schema]") {
+    Config cfg = base_config();
+    auto page = make_page("My Post", "/posts/my-post/", "2025-01-01");
+    page["word_count"]   = 350;
+    page["reading_time"] = 2;
+
+    std::string out = build_json_ld(cfg, page, nlohmann::json::array());
+    // No org_name -> script 0 is WebSite, script 1 is the page schema.
+    nlohmann::json schema = extract_script(out, 1);
+    REQUIRE(schema["@type"] == "BlogPosting");
+    REQUIRE(schema["wordCount"] == 350);
+    REQUIRE(schema["timeRequired"] == "PT2M");
+}
+
+TEST_CASE("seo_schema: WebPage omits wordCount but emits timeRequired", "[seo_schema]") {
+    Config cfg = base_config();
+    auto page = make_page("About", "/about/", "2025-01-01");
+    page["word_count"]   = 120;
+    page["reading_time"] = 1;
+
+    std::string out = build_json_ld(cfg, page, nlohmann::json::array());
+    nlohmann::json schema = extract_script(out, 1);
+    REQUIRE(schema["@type"] == "WebPage");
+    REQUIRE_FALSE(schema.contains("wordCount"));  // wordCount only on Article types
+    REQUIRE(schema["timeRequired"] == "PT1M");     // timeRequired on any page
+}
+
+TEST_CASE("seo_schema: zero reading_time omits timeRequired", "[seo_schema]") {
+    Config cfg = base_config();
+    auto page = make_page("Empty", "/posts/empty/", "2025-01-01");
+    page["word_count"]   = 0;
+    page["reading_time"] = 0;
+
+    std::string out = build_json_ld(cfg, page, nlohmann::json::array());
+    nlohmann::json schema = extract_script(out, 1);
+    REQUIRE_FALSE(schema.contains("wordCount"));
+    REQUIRE_FALSE(schema.contains("timeRequired"));
+}
+
+TEST_CASE("seo_schema: explicit page.schema.wordCount overrides auto", "[seo_schema]") {
+    Config cfg = base_config();
+    auto page = make_page("Post", "/posts/post/", "2025-01-01");
+    page["word_count"]   = 300;
+    page["reading_time"] = 2;
+    // An explicit schema override should win via deep_merge.
+    page["schema"] = {
+        {"@type", "BlogPosting"},
+        {"wordCount", 999}
+    };
+
+    std::string out = build_json_ld(cfg, page, nlohmann::json::array());
+    nlohmann::json schema = extract_script(out, 1);
+    REQUIRE(schema["wordCount"] == 999);
+    // timeRequired wasn't overridden — auto value still present.
+    REQUIRE(schema["timeRequired"] == "PT2M");
+}

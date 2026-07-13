@@ -396,6 +396,32 @@ void add_key_takeaways(nlohmann::json& schema, const nlohmann::json& page) {
     }
 }
 
+// G12: inject readability metrics onto the page schema. wordCount is
+// Schema.org-valid only on Article-family types, so we gate it on @type;
+// timeRequired applies to any page that has a reading time. Called from
+// build_page_schema AFTER add_key_takeaways, BEFORE deep_merge so an
+// explicit `page.schema.wordCount`/`timeRequired` still wins.
+void add_readability(nlohmann::json& schema, const nlohmann::json& page) {
+    bool has_word_count = page.contains("word_count") &&
+                          page["word_count"].is_number_integer();
+    bool has_reading_time = page.contains("reading_time") &&
+                            page["reading_time"].is_number_integer();
+
+    if (has_word_count && page["word_count"].get<int>() > 0) {
+        std::string type = schema.value("@type", "");
+        if (type == "BlogPosting" || type == "Article" ||
+            type == "NewsArticle" || type == "TechArticle") {
+            schema["wordCount"] = page["word_count"].get<int>();
+        }
+    }
+
+    if (has_reading_time && page["reading_time"].get<int>() > 0) {
+        // ISO 8601 duration: PT5M = 5 minutes.
+        schema["timeRequired"] = "PT" +
+            std::to_string(page["reading_time"].get<int>()) + "M";
+    }
+}
+
 // Resolve the @type using the documented precedence, build the auto schema,
 // then deep-merge any explicit `page.schema` over it.
 nlohmann::json build_page_schema(const Config& cfg, const nlohmann::json& page) {
@@ -429,6 +455,9 @@ nlohmann::json build_page_schema(const Config& cfg, const nlohmann::json& page) 
 
     // G9: attach key takeaways as mainEntity ItemList (before deep_merge).
     add_key_takeaways(schema, page);
+
+    // G12: attach wordCount (Article types) + timeRequired (any page).
+    add_readability(schema, page);
 
     if (has_schema) {
         deep_merge(schema, page["schema"]);

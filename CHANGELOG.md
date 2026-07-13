@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-07-13
+
+### Added
+- Reading time / word count / difficulty (G12). Every page now exposes `{{ page.word_count }}`, `{{ page.reading_time }}` (minutes, assuming 200 words/minute), and `{{ page.difficulty }}` (`"easy"`, `"moderate"`, `"difficult"`, `"very-difficult"` via the Flesch reading-ease heuristic) — cheap computed fields derived from the rendered HTML. `<pre>` and `<code>` blocks are stripped before counting (code isn't prose), and CJK ideographs are counted as one word each since CJK text isn't whitespace-separated. Flesch difficulty is only computed for English-dominant prose (skipped when CJK characters dominate, since the formula is English-specific) and returns an empty string otherwise. When `seo.json_ld_enabled = true`, Article-typed pages (BlogPosting, Article, NewsArticle, TechArticle) also emit `wordCount` on the JSON-LD schema, and any page with a reading time emits `timeRequired` as an ISO 8601 duration (`PT5M` = 5 minutes). Explicit `page.schema.wordCount`/`page.schema.timeRequired` in frontmatter overrides the auto values via deep-merge. Always on (pure derived metadata, like `excerpt`, `passages`, and `toc`); JSON-LD emission rides the existing `json_ld_enabled` flag.
+
 ## [0.14.0] - 2026-07-10
 
 ### Added

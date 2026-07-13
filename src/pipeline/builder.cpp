@@ -6,6 +6,7 @@
 #include "content/link_graph.hpp"
 #include "content/markdown.hpp"
 #include "content/passage_index.hpp"
+#include "content/readability.hpp"
 #include "content/toc.hpp"
 #include "content/schema_blocks.hpp"
 #include "content/shortcodes.hpp"
@@ -861,6 +862,19 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
                 rp.parsed.frontmatter.custom["toc"] = to_json(toc);
                 replace_toc_markers(rp.html_content, toc);
             }
+        }
+
+        // G12: Reading time / word count / difficulty. Cheap computed
+        // fields exposed as {{ page.word_count }}, {{ page.reading_time }},
+        // {{ page.difficulty }}; seo_schema emits wordCount + timeRequired
+        // on Article-typed JSON-LD. Always on (pure derived data, like
+        // excerpt/passages/toc). Runs AFTER render_markdown so the HTML
+        // is final (code blocks stripped before counting — code isn't prose).
+        {
+            auto rd = compute_readability(rp.html_content);
+            rp.parsed.frontmatter.custom["word_count"]   = rd.word_count;
+            rp.parsed.frontmatter.custom["reading_time"] = rd.reading_time_min;
+            rp.parsed.frontmatter.custom["difficulty"]   = rd.difficulty;
         }
 
         nlohmann::json tags = nlohmann::json::array();

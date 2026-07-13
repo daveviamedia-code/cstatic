@@ -394,7 +394,7 @@ page_context_json["toc"] = to_json(toc);
 
 ---
 
-### G12. Reading Time / Word Count / Difficulty
+### G12. Reading Time / Word Count / Difficulty   DONE
 
 **Approach**: Cheap computed fields exposed to templates and JSON-LD.
 

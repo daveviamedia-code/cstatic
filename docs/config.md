@@ -787,6 +787,33 @@ headings.
 Headings that already have an `id` attribute (e.g. from raw HTML in your
 markdown) are preserved verbatim — no duplicate ID is injected.
 
+### Reading Time / Word Count / Difficulty
+
+C-Static computes three cheap readability metrics from every page's rendered
+HTML and exposes them as template variables. This is pure derived metadata
+(like `excerpt`, `passages`, and `toc`), so it is always on regardless of
+config.
+
+**Template variables** — All three are available on every `page` context:
+
+| Variable | Type | Notes |
+|----------|------|-------|
+| `{{ page.word_count }}` | int | Whitespace-separated words + CJK ideographs (each CJK char counts as one word, since CJK text isn't whitespace-separated). |
+| `{{ page.reading_time }}` | int | Estimated reading time in minutes, computed as `ceil(word_count / 200)` (200 = average adult reading speed for English prose). |
+| `{{ page.difficulty }}` | string | One of `"easy"`, `"moderate"`, `"difficult"`, `"very-difficult"` via the Flesch reading-ease heuristic, or empty string when not computable. |
+
+`<pre>` and `<code>` blocks are stripped before counting — code isn't prose
+and skews the syllable counter. The Flesch formula is English-specific, so
+`difficulty` is only computed for English-dominant prose and returns an empty
+string when CJK characters make up half or more of the counted words.
+
+**JSON-LD** — When `[seo] json_ld_enabled = true` (see [JSON-LD Options](#json-ld-options)),
+Article-typed pages (BlogPosting, Article, NewsArticle, TechArticle) also
+emit `wordCount` on the page schema, and any page with a reading time emits
+`timeRequired` as an ISO 8601 duration (`PT5M` = 5 minutes). Explicit
+`page.schema.wordCount` or `page.schema.timeRequired` in frontmatter overrides
+the auto values via deep-merge.
+
 ### Citation Tags
 
 When `seo.citation_tags_enabled = true`, C-Static emits `citation_*` meta tags

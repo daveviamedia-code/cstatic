@@ -212,9 +212,13 @@ robots = false
 # To welcome AI/LLM crawlers (ChatGPT, Perplexity, Google AI Overviews), set:
 # robots_ai_crawlers_mode = "allow"   # or "disallow" / "custom"
 # llms_txt = false  # emit /llms.txt + /llms-full.txt for LLM crawlers
+
+[seo]
 # json_ld_enabled = false  # emit Schema.org JSON-LD structured data
 # citation_tags_enabled = false  # emit citation_* meta tags (Scholar/Perplexity/ChatGPT)
-# authors_enabled = false  # E-E-A-T: load src/authors/*.md, resolve `author: <slug>`
+
+[authors]
+# enabled = false  # E-E-A-T: load src/authors/*.md, resolve `author: <slug>`
 
 [[collection]]
 name = "posts"

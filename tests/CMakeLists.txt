@@ -26,6 +26,7 @@ set(LIB_SOURCES
     ${CMAKE_SOURCE_DIR}/src/data/data_loader.cpp
     ${CMAKE_SOURCE_DIR}/src/hash/hash_store.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/sitemap.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/sitemap_ai.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/rss.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/json_feed.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/llms_txt.cpp
@@ -67,6 +68,7 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/tests/test_seo_schema.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_schema_blocks.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_authors_index.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_sitemap_ai.cpp
 )
 
 add_executable(cstatic_tests ${TEST_SOURCES} ${LIB_SOURCES})

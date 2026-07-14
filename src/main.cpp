@@ -212,6 +212,7 @@ robots = false
 # To welcome AI/LLM crawlers (ChatGPT, Perplexity, Google AI Overviews), set:
 # robots_ai_crawlers_mode = "allow"   # or "disallow" / "custom"
 # llms_txt = false  # emit /llms.txt + /llms-full.txt for LLM crawlers
+# sitemap_ai = false  # emit /sitemap-ai.xml (curated for AI crawlers)
 
 [seo]
 # json_ld_enabled = false  # emit Schema.org JSON-LD structured data
@@ -219,6 +220,10 @@ robots = false
 
 [authors]
 # enabled = false  # E-E-A-T: load src/authors/*.md, resolve `author: <slug>`
+
+# [sitemap_ai]  # used only when modules.sitemap_ai = true
+# include_images = true
+# exclude_types = []
 
 [[collection]]
 name = "posts"

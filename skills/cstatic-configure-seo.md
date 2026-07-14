@@ -231,7 +231,26 @@ C-Static can generate a sitemap, RSS feed, JSON Feed, robots.txt, and per-page s
     - Flesch difficulty is English-specific: CJK-dominated text (≥ half of counted words are CJK chars) yields an empty `difficulty` string.
     - When `seo.json_ld_enabled = true` (step 1), Article-typed pages (BlogPosting/Article/NewsArticle/TechArticle) also emit `wordCount` on the JSON-LD schema, and any page with a reading time emits `timeRequired` as an ISO 8601 duration (`PT5M` = 5 minutes). Explicit `page.schema.wordCount` or `page.schema.timeRequired` in frontmatter overrides via deep-merge.
 
-15. **Build:** `cstatic build`.
+15. **AI sitemap (`modules.sitemap_ai`, default off).** When enabled, C-Static generates a curated `/sitemap-ai.xml` alongside the standard `/sitemap.xml` — a second sitemap for AI crawlers (ChatGPT, Perplexity, Google AI Overviews) that filters out thin pages:
+
+    ```toml
+    [modules]
+    sitemap_ai = true
+
+    [sitemap_ai]
+    include_images = true       # default; embed <image:image> from og_image + image
+    exclude_types = ["landing"] # default []; drop pages with these page.type values
+    ```
+
+    A page must pass ALL filters to appear in `sitemap-ai.xml`:
+    - Not matching `sitemap.exclude` globs (inherited from the standard sitemap).
+    - URL doesn't contain `/tags/`, `/categories/`, or `/page/` (taxonomy listings + paginated indexes).
+    - `word_count > 100` (from step 14 — naturally excludes taxonomy pages which lack word_count).
+    - `page.type` not in `sitemap_ai.exclude_types`.
+
+    When `include_images = true`, each `<url>` block gains deduped `<image:image>` entries from `og_image` + `image` (relative URLs resolved to absolute via `site.base_url`). The `xmlns:image` namespace is only declared when at least one included page has images.
+
+16. **Build:** `cstatic build`.
 
 ## Gotchas
 
@@ -248,3 +267,4 @@ C-Static can generate a sitemap, RSS feed, JSON Feed, robots.txt, and per-page s
 - **Passage IDs and TOC IDs are aligned**: both G8 (passage index) and G11 (auto TOC) use the same shared `utils::slugify` to generate heading IDs. G11 injects matching `id="..."` attributes into rendered `<h2>`–`<h6>` tags so `#passage-id` anchor links and JSON-LD `hasPart[].url` targets resolve in browsers. Headings with pre-existing `id` attributes are preserved by G11 (but G8 still computes from text — rare edge case).
 - **`json_ld_enabled` is under `[seo]`, not `[modules]`**: the scaffold's commented hint correctly sits under the `[seo]` table; the reader key is `seo.json_ld_enabled`. The `[authors]` table is separate (`authors.enabled`) and gates only the author entity system (resolution + profile pages), independent of JSON-LD. (Older scaffolds misplaced the comment under `[modules]` — uncommenting it there silently did nothing.)
 - **Brand validation is always on when `org_name` is set** — no separate flag to enable/suppress. Warnings are non-fatal (print to stderr, don't fail the build). The `{{ site.org }}` variable (not top-level `{{ org }}`) is available in all templates when `org_name` is non-empty, regardless of `json_ld_enabled`.
+- **`sitemap_ai` filters are cumulative** (all must pass): inherits `sitemap.exclude`, hardcodes `/tags/`+`/categories/`+`/page/` URL drops, requires `word_count > 100`, and checks `sitemap_ai.exclude_types`. The `word_count` gate naturally excludes taxonomy/listing pages (they lack `word_count`) and data-driven pages (G12 only runs on the markdown path). `include_images = true` (default) resolves relative image URLs to absolute via `site.base_url`; the `xmlns:image` namespace is only declared when at least one included page actually has images.

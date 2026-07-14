@@ -417,7 +417,7 @@ Readability compute(const std::string& text);
 
 ## Tier 3 — Discovery & Verification
 
-### G13. AI Sitemap Variants
+### G13. AI Sitemap Variants — DONE
 
 **Approach**: Beyond the standard `sitemap.xml`, emit `sitemap-ai.xml` excluding thin pages (paginated indexes, taxonomy pages without prose, tag pages). Optionally include `image:` entries.
 

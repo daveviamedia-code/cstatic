@@ -505,6 +505,7 @@ A default `templates/og-default.svg` (1200×630) is scaffolded by `cstatic init`
 | `json_feed` | bool | `false` | Generate JSON Feed 1.1 at `feed.json` |
 | `robots` | bool | `false` | Generate `robots.txt` |
 | `llms_txt` | bool | `false` | Generate `llms.txt` + `llms-full.txt` for LLM crawlers |
+| `sitemap_ai` | bool | `false` | Generate curated `sitemap-ai.xml` for AI crawlers |
 
 ```toml
 [modules]
@@ -513,6 +514,7 @@ rss = false
 json_feed = false
 robots = false
 llms_txt = false
+sitemap_ai = false
 ```
 
 ### RSS Options
@@ -953,6 +955,42 @@ dir = "src/authors"
 [sitemap]
 exclude = ["/404.html", "/private/"]
 ```
+
+### AI Sitemap Options
+
+When `modules.sitemap_ai = true`, C-Static generates a curated
+`sitemap-ai.xml` alongside the standard `sitemap.xml`. This second sitemap
+filters out thin pages (taxonomy listings, paginated indexes, low word-count
+pages) so AI crawlers (ChatGPT, Perplexity, Google AI Overviews) discover
+only substantive, citable prose content.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `include_images` | bool | `true` | Embed `<image:image>` entries from `og_image`/`image` fields |
+| `exclude_types` | string[] | `[]` | `page.type` values to exclude (e.g. `["landing"]`) |
+
+```toml
+[modules]
+sitemap_ai = true
+
+[sitemap_ai]
+include_images = true
+exclude_types = ["landing"]
+```
+
+**Filtering rules** (all must pass for a page to appear in `sitemap-ai.xml`):
+
+1. **Inherits `sitemap.exclude`** — pages matching those globs are dropped.
+2. **Thin URL patterns** — URLs containing `/tags/`, `/categories/`, or
+   `/page/` are always excluded (taxonomy listings and paginated indexes).
+3. **Word count gate** — `word_count` (from G12 readability) must be `> 100`.
+   Pages without `word_count` (e.g. data-driven pages) are excluded.
+4. **Type exclusion** — if `page.type` matches any value in `exclude_types`.
+
+When `include_images = true`, each `<url>` block gains `<image:image>` entries
+collected from the page's `og_image` and `image` fields (deduped, relative
+URLs resolved to absolute via `site.base_url`). The `xmlns:image` namespace
+is only declared when at least one included page has images.
 
 ---
 

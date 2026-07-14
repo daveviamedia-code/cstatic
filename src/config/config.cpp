@@ -261,6 +261,7 @@ Config load_config(const std::string& path, const std::string& env) {
     cfg.module_rss      = optional_bool(tbl, "modules.rss",     cfg.module_rss);
     cfg.module_json_feed = optional_bool(tbl, "modules.json_feed", cfg.module_json_feed);
     cfg.module_robots   = optional_bool(tbl, "modules.robots",  cfg.module_robots);
+    cfg.module_sitemap_ai = optional_bool(tbl, "modules.sitemap_ai", cfg.module_sitemap_ai);
 
     // --- [modules.rss] ---
     cfg.rss_title       = optional_string(tbl, "modules.rss_title", cfg.site_title);
@@ -312,6 +313,10 @@ Config load_config(const std::string& path, const std::string& env) {
 
     // --- [sitemap] ---
     cfg.sitemap_exclude = optional_string_array(tbl, "sitemap.exclude");
+
+    // --- [sitemap_ai] (used only when module_sitemap_ai = true) ---
+    cfg.sitemap_ai_include_images = optional_bool(tbl, "sitemap_ai.include_images", cfg.sitemap_ai_include_images);
+    cfg.sitemap_ai_exclude_types = optional_string_array(tbl, "sitemap_ai.exclude_types");
 
     // --- [hooks] ---
     cfg.hook_before_build = optional_string(tbl, "hooks.before_build", "");
@@ -437,6 +442,7 @@ std::string config_to_json(const Config& cfg) {
     j["modules"]["rss"]        = cfg.module_rss;
     j["modules"]["json_feed"]  = cfg.module_json_feed;
     j["modules"]["robots"]     = cfg.module_robots;
+    j["modules"]["sitemap_ai"] = cfg.module_sitemap_ai;
 
     j["modules"]["rss_title"]       = cfg.rss_title;
     j["modules"]["rss_description"] = cfg.rss_description;
@@ -470,6 +476,9 @@ std::string config_to_json(const Config& cfg) {
     j["authors"]["dir"]     = cfg.authors_dir;
 
     j["sitemap"]["exclude"] = cfg.sitemap_exclude;
+
+    j["sitemap_ai"]["include_images"] = cfg.sitemap_ai_include_images;
+    j["sitemap_ai"]["exclude_types"]  = cfg.sitemap_ai_exclude_types;
 
     j["hooks"]["before_build"] = cfg.hook_before_build;
     j["hooks"]["after_build"]  = cfg.hook_after_build;

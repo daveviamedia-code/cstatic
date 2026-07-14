@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-07-14
+
+### Added
+- AI sitemap variants (G13). When `modules.sitemap_ai = true`, C-Static generates a curated `sitemap-ai.xml` alongside the standard `sitemap.xml`. This second sitemap filters out thin pages so AI crawlers (ChatGPT, Perplexity, Google AI Overviews) discover only substantive, citable prose content. Filtering rules (all must pass): inherits `sitemap.exclude` globs, drops URLs containing `/tags/`, `/categories/`, or `/page/` (taxonomy listings and paginated indexes), requires `word_count > 100` (from G12 readability — naturally excludes taxonomy pages which lack word_count), and drops pages whose `type` matches any value in `sitemap_ai.exclude_types`. When `sitemap_ai.include_images = true` (default), each `<url>` block gains deduped `<image:image>` entries collected from the page's `og_image` and `image` fields (relative URLs resolved to absolute via `site.base_url`); the `xmlns:image` namespace is only declared when at least one included page has images. Opt-in and backwards-compatible; existing builds are unaffected unless the flag is set.
+
 ## [0.15.0] - 2026-07-13
 
 ### Added

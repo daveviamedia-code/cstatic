@@ -13,6 +13,7 @@
 #include "data/data_loader.hpp"
 #include "hash/hash_store.hpp"
 #include "modules/sitemap.hpp"
+#include "modules/sitemap_ai.hpp"
 #include "modules/rss.hpp"
 #include "modules/json_feed.hpp"
 #include "modules/llms_txt.hpp"
@@ -894,6 +895,16 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         page_meta["canonical"]          = rp.parsed.frontmatter.canonical;
         page_meta["sitemap_changefreq"] = rp.parsed.frontmatter.sitemap_changefreq;
         page_meta["sitemap_priority"]   = rp.parsed.frontmatter.sitemap_priority;
+        // G13: word_count + type flow into pages_array so sitemap_ai can
+        // filter thin pages. word_count comes from G12 readability; type
+        // comes from frontmatter.custom (not a known frontmatter key).
+        page_meta["word_count"] = rp.parsed.frontmatter.custom.value("word_count", 0);
+        {
+            auto it = rp.parsed.frontmatter.custom.find("type");
+            if (it != rp.parsed.frontmatter.custom.end() && it->is_string()) {
+                page_meta["type"] = it->get<std::string>();
+            }
+        }
         pages_array.push_back(page_meta);
     }
 
@@ -1919,6 +1930,9 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
     {
         if (cfg.module_sitemap) {
             modules::generate_sitemap(cfg, pages_array, cfg.output_dir);
+        }
+        if (cfg.module_sitemap_ai) {
+            modules::generate_sitemap_ai(cfg, pages_array, cfg.output_dir);
         }
         if (cfg.module_rss) {
             modules::generate_rss(cfg, pages_array, cfg.output_dir);

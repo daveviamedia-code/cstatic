@@ -86,6 +86,7 @@ struct Config {
     bool module_rss      = false;
     bool module_json_feed = false;
     bool module_robots   = false;
+    bool module_sitemap_ai = false;
 
     // [modules.rss] (used only when module_rss = true; also feeds JSON Feed)
     int         rss_item_count = 20;
@@ -149,6 +150,12 @@ struct Config {
 
     // [sitemap]
     std::vector<std::string> sitemap_exclude;
+
+    // [sitemap_ai] (used only when module_sitemap_ai = true)
+    // Curated sitemap-ai.xml that filters out thin pages (taxonomy listings,
+    // paginated indexes, low word-count pages) for AI crawlers.
+    bool        sitemap_ai_include_images = true;
+    std::vector<std::string> sitemap_ai_exclude_types;  // page.type values to drop
 
     // [hooks]
     std::string hook_before_build;

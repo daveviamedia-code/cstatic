@@ -191,6 +191,8 @@ In every layout's `<head>`, add `{{ seo_meta }}` — it emits description, Open 
 
 **Brand mention normalization** (no config flag; automatic when `org_name` is set). When `seo.org_name` is non-empty, C-Static validates the Organization identity once per build and exposes `{{ site.org }}` so footers, contact blocks, and about pages all render from a single source of truth. Validation checks (non-fatal `warn:` on stderr): `org_name` diverging from `site_title` (informational), `org_logo` local-path file not found under `static_dir` (absolute URLs skipped), `org_same_as` entries that aren't URLs, and `org_founders` entries that don't match a known author slug (checked only when `authors.enabled = true`). The `{{ site.org }}` object mirrors the JSON-LD fields in a template-friendly shape: `name`, `url`, `legal_name`, `logo_url`, `founding_date`, `founders` (string[]), `same_as` (string[]) — only non-empty fields included.
 
+**AI sitemap** (`modules.sitemap_ai = true`). Generates a curated `/sitemap-ai.xml` for AI crawlers (ChatGPT, Perplexity, Google AI Overviews) that filters out thin pages. A page must pass ALL of: not matching `sitemap.exclude` globs (inherited), URL doesn't contain `/tags/`, `/categories/`, or `/page/` (taxonomy + paginated indexes), `word_count > 100` (from G12 — naturally excludes taxonomy pages which lack word_count), and `page.type` not in `sitemap_ai.exclude_types`. When `sitemap_ai.include_images = true` (default), each `<url>` block gains deduped `<image:image>` entries from `og_image` + `image` (relative resolved to absolute via `site.base_url`); the `xmlns:image` namespace is only declared when at least one included page has images. See `docs/config.md` → AI Sitemap Options.
+
 ### 5.7 Add data-driven pages
 
 ```toml
@@ -241,11 +243,12 @@ Full reference: `docs/config.md`. Most-used keys:
 | `[build.highlight]` | `enabled`, `style` | `true`, `"github"` | `style` ∈ `github` \| `github-dark`. Writes `css/highlight.css`. |
 | `[build.images]` | `optimize`, `max_width`, `quality`, `webp`, `avif` | `optimize=false` | webp/avif need `cwebp`/`avifenc` on PATH. |
 | `[build.markdown]` | `extensions`, `shortcodes_dir`, `wikilinks` | all ext / `shortcodes` / `false` | `extensions` ∈ `table`,`tasklist`,`strikethrough`,`autolink`. |
-| `[modules]` | `sitemap`, `rss`, `json_feed`, `robots`, `llms_txt` | `T`/`F`/`F`/`F`/`F` | Plus `rss_title`/`rss_description`/`rss_item_count`, `json_feed_output`, `llms_txt_description`/`llms_txt_max_pages`/`llms_txt_exclude`, `robots_*` (incl. `robots_ai_crawlers_mode` ∈ `off`\|`allow`\|`disallow`\|`custom` + `robots_ai_crawlers_custom`). `llms_txt` writes `/llms.txt` + `/llms-full.txt`; summary falls back to `site.description`. |
+| `[modules]` | `sitemap`, `rss`, `json_feed`, `robots`, `llms_txt`, `sitemap_ai` | `T`/`F`/`F`/`F`/`F`/`F` | Plus `rss_title`/`rss_description`/`rss_item_count`, `json_feed_output`, `llms_txt_description`/`llms_txt_max_pages`/`llms_txt_exclude`, `robots_*` (incl. `robots_ai_crawlers_mode` ∈ `off`\|`allow`\|`disallow`\|`custom` + `robots_ai_crawlers_custom`), `sitemap_ai` (writes curated `/sitemap-ai.xml`; tuned via `[sitemap_ai]` `include_images`/`exclude_types`). `llms_txt` writes `/llms.txt` + `/llms-full.txt`; summary falls back to `site.description`. |
 | `[og_images]` | `enabled`, `template`, `output_format`, `width`, `height`, `output_dir` | `F`/`og-default`/`png`/`1200`/`630`/`og` | PNG needs rsvg-convert/convert/inkscape. |
 | `[seo]` | `json_ld_enabled` + `citation_tags_enabled` + `org_*` + `website_search_url_template` | `F` / empty | JSON-LD structured data. `org_name` enables Organization schema (and brand-mention validation: logo file existence, same_as URL format, founders vs author slugs); `website_search_url_template` adds WebSite SearchAction. `citation_tags_enabled` emits `citation_*` meta tags (Scholar/Perplexity/ChatGPT) — reads `pdf_url`/`journal`/`doi`/`tldr`/`created` from custom frontmatter. `{{ site.org }}` exposes the resolved org object when `org_name` is set. |
 | `[authors]` | `enabled`, `dir` | `F`, `src/authors` | E-E-A-T author entities. Loads `<dir>/<slug>.md`; page `author: <slug>` resolves to `{{ page.author }}` + Person JSON-LD. Generates profile pages at `/<dir_base>/<slug>/`. |
 | `[sitemap]` | `exclude` | `[]` | URL paths to drop. |
+| `[sitemap_ai]` | `include_images`, `exclude_types` | `true`, `[]` | Used only when `modules.sitemap_ai = true`. Curated AI sitemap filtering (see §5.6). |
 | `[data]` | `data_dir` | `_data` | |
 | `[[data_source]]` | `file`, `template`, `url_pattern`, `item_key`, `per_page`, `per_item` | — | Array of tables. |
 | `[[collection]]` | `name`, `template`, `index_template`, `url_pattern`, `sort_by`, `sort_order` | `sort_by=date`,`desc` | Array of tables. |
@@ -288,7 +291,7 @@ Any extra field becomes `page.<field_name>` in templates. Commerce fields (`bran
 | `site` | Site config: `title`, `base_url`, `language`, `env` (current env name), `twitter_handle`, `org` (normalized organization object when `org_name` is set — see Brand Mention Normalization), and `authors` (map of slug→author object, when `authors.enabled = true`). |
 | `page` | Current page: `title`, `url`, `content`, `date`, `tags`, `excerpt`, `passages` (`[{id, heading, text, level}]`), plus any extra frontmatter. Gains `backlinks` when wikilinks are on. Gains `faq` (`[{question, answer_html, answer_text}]`) when standalone `##?` questions are present. `page.author` is a resolved object (name, title, bio, …) when `authors.enabled = true` and the slug matches a loaded author. |
 | `author` | On generated author profile pages (`/<authors_dir>/<slug>/`): the author object plus `.posts` (their published pages). `page.type` is `"ProfilePage"`. |
-| `pages` | All pages, sorted by date (newest first). Excludes drafts, future-scheduled, and alias redirect stubs. |
+| `pages` | All pages, sorted by date (newest first). Excludes drafts, future-scheduled, and alias redirect stubs. Each entry carries `word_count` + `type` (when available) — used by the `sitemap_ai` module for thin-page filtering. |
 | `data` | All loaded data files, keyed by filename stem. |
 | `item` | Current data item (data-driven pages with `per_item`). |
 | `pagination` | `page`, `total_pages`, `prev_url`, `next_url`, `items` (paginated pages). |

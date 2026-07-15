@@ -439,7 +439,7 @@ std::vector<std::string> sitemap_ai_exclude_types;  // page.type values to drop
 
 ---
 
-### G14. `.well-known/` AI Discovery
+### G14. `.well-known/` AI Discovery   DONE
 
 **Approach**: Generator for AI-plugin manifests and other discovery files. Reuses the existing module pattern.
 

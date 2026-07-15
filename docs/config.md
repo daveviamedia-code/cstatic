@@ -994,6 +994,49 @@ is only declared when at least one included page has images.
 
 ---
 
+## `[well_known]` — `.well-known/` Discovery Files
+
+Two independently opt-in generators write standard discovery files to
+`output/.well-known/`. When both are disabled (the default), no
+`.well-known/` directory is created.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `ai_plugin_enabled` | bool | `false` | Emit `.well-known/ai-plugin.json` (OpenAI plugin manifest) |
+| `ai_plugin_schema_version` | string | `"v1"` | Manifest `schema_version` field |
+| `ai_plugin_name` | string | `site.title` | Display name (`name_for_human`) |
+| `ai_plugin_description` | string | `site.description` | Description (`description_for_human`/`_for_model`) |
+| `security_txt_enabled` | bool | `false` | Emit `.well-known/security.txt` (RFC 9116) |
+| `security_txt_content` | string | `""` | Raw security.txt content, written verbatim |
+
+```toml
+[well_known]
+ai_plugin_enabled = true
+ai_plugin_schema_version = "v1"
+# ai_plugin_name = "Acme Blog"        # defaults to site.title
+# ai_plugin_description = "..."        # defaults to site.description
+
+security_txt_enabled = true
+security_txt_content = "Contact: mailto:security@example.com\nExpires: 2026-12-31T23:59:59.000Z\n"
+```
+
+**`ai-plugin.json` field derivation**:
+- `schema_version` — from `ai_plugin_schema_version` (default `"v1"`).
+- `name_for_human` — `ai_plugin_name`, falling back to `site.title`.
+- `name_for_model` — the slugified name (lowercase, hyphenated).
+- `description_for_human` / `description_for_model` — `ai_plugin_description`,
+  falling back to `site.description`. Omitted entirely when both are empty.
+- `auth` — `{"type": "none"}` (static sites have no authenticated API surface).
+- `api` — `{"type": "openapi", "url": "<base_url>/openapi.json"}`. Drop a
+  `static/openapi.json` if you want a live API contract.
+- `logo_url` — resolved from `seo.org_logo` (if set) against the site base URL;
+  absolute URLs kept as-is. Omitted when `org_logo` is unset.
+
+**`security.txt`** is written verbatim from `security_txt_content` — author
+supplies the full RFC 9116 text (`Contact:`, `Expires:`, etc.).
+
+---
+
 ## `[hooks]` — Build Hooks
 
 Run custom shell scripts before and/or after each build. Hooks receive environment variables with build context.

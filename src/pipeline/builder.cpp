@@ -21,6 +21,7 @@
 #include "modules/seo_schema.hpp"
 #include "modules/search.hpp"
 #include "modules/og_images.hpp"
+#include "modules/well_known.hpp"
 #include "template/renderer.hpp"
 #include "utils/path.hpp"
 #include "utils/terminal.hpp"
@@ -1945,6 +1946,9 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         }
         if (cfg.module_robots) {
             modules::generate_robots(cfg, cfg.output_dir);
+        }
+        if (cfg.wk_ai_plugin_enabled || cfg.wk_security_txt_enabled) {
+            modules::generate_well_known(cfg, cfg.output_dir);
         }
         if (cfg.search_enabled) {
             modules::generate_search_index(cfg, pages_array, cfg.output_dir);

@@ -28,6 +28,7 @@ A fast, minimal static site generator written in C++17.
 - **Brand mention normalization** — When `seo.org_name` is set, C-Static validates the Organization identity (logo file existence, same_as URL format, founders vs known author slugs, name vs site_title divergence) and exposes `{{ site.org }}` so footers and contact blocks render from a single source of truth
 - **Reading time / word count / difficulty** — Every page exposes `{{ page.word_count }}`, `{{ page.reading_time }}` (minutes at 200 wpm), and `{{ page.difficulty }}` (Flesch reading-ease: easy/moderate/difficult/very-difficult); Article-typed pages also emit JSON-LD `wordCount` and any page emits `timeRequired` (ISO 8601 `PT5M`) when `json_ld_enabled` is on. CJK chars count as one word each; code blocks are stripped before counting
 - **AI sitemap** — `modules.sitemap_ai` generates a curated `/sitemap-ai.xml` that filters out thin pages (taxonomy listings, paginated indexes, `word_count <= 100`) and optionally embeds `<image:image>` entries for AI crawler discovery
+- **`.well-known/` discovery** — `well_known.ai_plugin_enabled` emits `/ai-plugin.json` (OpenAI manifest; name/description derived from site config) and `well_known.security_txt_enabled` emits `/security.txt` (RFC 9116, verbatim) under `/.well-known/`
 - **OG image generation** — Per-page social-card images from Inja SVG templates, converted to PNG via rsvg-convert/ImageMagick/Inkscape
 - **Content scaffolding** — `cstatic new` creates pages from archetypes (`archetypes/<kind>.md`) with `{{ title }}`, `{{ slug }}`, and `{{ date }}` placeholders
 - **Scheduled publishing** — Pages with a future `date` are automatically skipped until their date arrives (toggle with `build.publish_future`)
@@ -399,6 +400,9 @@ Then use `category: tutorials` in frontmatter (string) or `category: [web, dev]`
 | RSS      | `modules.rss`         | `/feed.xml`           |
 | JSON Feed| `modules.json_feed`   | `/feed.json`          |
 | Robots   | `modules.robots`      | `/robots.txt`         |
+| llms.txt | `modules.llms_txt`    | `/llms.txt`, `/llms-full.txt` |
+| AI Plugin | `well_known.ai_plugin_enabled` | `/.well-known/ai-plugin.json` |
+| security.txt | `well_known.security_txt_enabled` | `/.well-known/security.txt` |
 | 404      | Automatic             | `/404.html`           |
 
 ## Deployment

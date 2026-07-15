@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-07-15
+
+### Added
+- `.well-known/` AI discovery (G14). Two independently opt-in generators write to `output/.well-known/`: an OpenAI plugin manifest (`ai-plugin.json`) and a `security.txt`. Set `well_known.ai_plugin_enabled = true` to emit `ai-plugin.json` — `name`/`description` default to `site.title`/`site.description`, `name_for_model` is the slugified name, `logo_url` is resolved from `seo.org_logo` (if set) against the site base URL, `auth` is `none` (static sites have no authenticated API), and `api.url` points at the conventional `<base_url>/openapi.json` (drop a `static/openapi.json` if you want a live contract); `schema_version` defaults to `"v1"` (override via `well_known.ai_plugin_schema_version`). Set `well_known.security_txt_enabled = true` to write `security.txt` verbatim from `well_known.security_txt_content` (author supplies the full RFC 9116 text). When both are disabled (the default), no `.well-known/` directory is created. Opt-in and backwards-compatible; existing builds are unaffected unless a flag is set.
+
 ## [0.16.0] - 2026-07-14
 
 ### Added

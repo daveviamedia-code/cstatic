@@ -173,6 +173,11 @@ template = "og-default"    # templates/og-default.svg (scaffolded)
 
 [sitemap]
 exclude = ["/404.html"]    # URL paths to drop from sitemap
+
+[well_known]
+ai_plugin_enabled = true                 # /.well-known/ai-plugin.json (OpenAI manifest)
+security_txt_enabled = true              # /.well-known/security.txt (RFC 9116)
+security_txt_content = "Contact: mailto:security@example.com\nExpires: 2026-12-31T23:59:59.000Z\n"
 ```
 
 In every layout's `<head>`, add `{{ seo_meta }}` — it emits description, Open Graph, Twitter Card, and canonical tags; missing variables render empty, so it is always safe. When `seo.json_ld_enabled = true`, `{{ seo_meta }}` **also** appends Schema.org JSON-LD `<script>` blocks: a site-wide WebSite (+ Organization when `org_name` is set), a page-level schema whose `@type` auto-resolves from `page.type` / URL (`BlogPosting` for `/posts/...`, else `WebPage`; `Product`/`SoftwareApplication` mapped from commerce fields), a `BreadcrumbList` for nested URLs, and each `page.schema_extra` entry verbatim. An explicit `page.schema` object deep-merges over the auto-generated one. This is the keystone GEO feature — Google AI Overviews, ChatGPT, and Perplexity weight JSON-LD heavily when citing.
@@ -192,6 +197,8 @@ In every layout's `<head>`, add `{{ seo_meta }}` — it emits description, Open 
 **Brand mention normalization** (no config flag; automatic when `org_name` is set). When `seo.org_name` is non-empty, C-Static validates the Organization identity once per build and exposes `{{ site.org }}` so footers, contact blocks, and about pages all render from a single source of truth. Validation checks (non-fatal `warn:` on stderr): `org_name` diverging from `site_title` (informational), `org_logo` local-path file not found under `static_dir` (absolute URLs skipped), `org_same_as` entries that aren't URLs, and `org_founders` entries that don't match a known author slug (checked only when `authors.enabled = true`). The `{{ site.org }}` object mirrors the JSON-LD fields in a template-friendly shape: `name`, `url`, `legal_name`, `logo_url`, `founding_date`, `founders` (string[]), `same_as` (string[]) — only non-empty fields included.
 
 **AI sitemap** (`modules.sitemap_ai = true`). Generates a curated `/sitemap-ai.xml` for AI crawlers (ChatGPT, Perplexity, Google AI Overviews) that filters out thin pages. A page must pass ALL of: not matching `sitemap.exclude` globs (inherited), URL doesn't contain `/tags/`, `/categories/`, or `/page/` (taxonomy + paginated indexes), `word_count > 100` (from G12 — naturally excludes taxonomy pages which lack word_count), and `page.type` not in `sitemap_ai.exclude_types`. When `sitemap_ai.include_images = true` (default), each `<url>` block gains deduped `<image:image>` entries from `og_image` + `image` (relative resolved to absolute via `site.base_url`); the `xmlns:image` namespace is only declared when at least one included page has images. See `docs/config.md` → AI Sitemap Options.
+
+**`.well-known/` AI discovery** (`well_known.ai_plugin_enabled` and/or `well_known.security_txt_enabled`, both default off). Two independently opt-in generators write to `/.well-known/`: an OpenAI plugin manifest (`ai-plugin.json`) and a `security.txt` (RFC 9116). `ai-plugin.json` derives `name_for_human` from `ai_plugin_name` (default `site.title`), `name_for_model` from the slugified name, description from `ai_plugin_description` (default `site.description`, omitted when empty), `logo_url` from `seo.org_logo` resolved against the base URL (omitted when unset), `auth: {type: "none"}`, and `api: {type: "openapi", url: <base_url>/openapi.json}` — drop a `static/openapi.json` if you want a live contract. `security.txt` is written verbatim from `security_txt_content` (author supplies the full RFC 9116 text). When both are disabled no `.well-known/` directory is created. See `docs/config.md` → `.well-known` Discovery Files.
 
 ### 5.7 Add data-driven pages
 
@@ -249,6 +256,7 @@ Full reference: `docs/config.md`. Most-used keys:
 | `[authors]` | `enabled`, `dir` | `F`, `src/authors` | E-E-A-T author entities. Loads `<dir>/<slug>.md`; page `author: <slug>` resolves to `{{ page.author }}` + Person JSON-LD. Generates profile pages at `/<dir_base>/<slug>/`. |
 | `[sitemap]` | `exclude` | `[]` | URL paths to drop. |
 | `[sitemap_ai]` | `include_images`, `exclude_types` | `true`, `[]` | Used only when `modules.sitemap_ai = true`. Curated AI sitemap filtering (see §5.6). |
+| `[well_known]` | `ai_plugin_enabled`, `ai_plugin_schema_version`, `ai_plugin_name`, `ai_plugin_description`, `security_txt_enabled`, `security_txt_content` | `F`/`v1`/`""`/`""`/`F`/`""` | `/.well-known/` discovery files. `ai_plugin_enabled` writes `ai-plugin.json` (name/desc default to `site.title`/`site.description`, `logo_url` from `seo.org_logo`, `api.url` → `<base_url>/openapi.json`). `security_txt_enabled` writes `security.txt` verbatim from `security_txt_content`. |
 | `[data]` | `data_dir` | `_data` | |
 | `[[data_source]]` | `file`, `template`, `url_pattern`, `item_key`, `per_page`, `per_item` | — | Array of tables. |
 | `[[collection]]` | `name`, `template`, `index_template`, `url_pattern`, `sort_by`, `sort_order` | `sort_by=date`,`desc` | Array of tables. |

@@ -318,6 +318,14 @@ Config load_config(const std::string& path, const std::string& env) {
     cfg.sitemap_ai_include_images = optional_bool(tbl, "sitemap_ai.include_images", cfg.sitemap_ai_include_images);
     cfg.sitemap_ai_exclude_types = optional_string_array(tbl, "sitemap_ai.exclude_types");
 
+    // --- [well_known] ---
+    cfg.wk_ai_plugin_enabled        = optional_bool(tbl,   "well_known.ai_plugin_enabled", cfg.wk_ai_plugin_enabled);
+    cfg.wk_ai_plugin_schema_version = optional_string(tbl, "well_known.ai_plugin_schema_version", cfg.wk_ai_plugin_schema_version);
+    cfg.wk_ai_plugin_name           = optional_string(tbl, "well_known.ai_plugin_name", cfg.wk_ai_plugin_name);
+    cfg.wk_ai_plugin_description    = optional_string(tbl, "well_known.ai_plugin_description", cfg.wk_ai_plugin_description);
+    cfg.wk_security_txt_enabled     = optional_bool(tbl,   "well_known.security_txt_enabled", cfg.wk_security_txt_enabled);
+    cfg.wk_security_txt_content     = optional_string(tbl, "well_known.security_txt_content", cfg.wk_security_txt_content);
+
     // --- [hooks] ---
     cfg.hook_before_build = optional_string(tbl, "hooks.before_build", "");
     cfg.hook_after_build  = optional_string(tbl, "hooks.after_build", "");
@@ -479,6 +487,13 @@ std::string config_to_json(const Config& cfg) {
 
     j["sitemap_ai"]["include_images"] = cfg.sitemap_ai_include_images;
     j["sitemap_ai"]["exclude_types"]  = cfg.sitemap_ai_exclude_types;
+
+    j["well_known"]["ai_plugin_enabled"]        = cfg.wk_ai_plugin_enabled;
+    j["well_known"]["ai_plugin_schema_version"] = cfg.wk_ai_plugin_schema_version;
+    j["well_known"]["ai_plugin_name"]           = cfg.wk_ai_plugin_name;
+    j["well_known"]["ai_plugin_description"]    = cfg.wk_ai_plugin_description;
+    j["well_known"]["security_txt_enabled"]     = cfg.wk_security_txt_enabled;
+    j["well_known"]["security_txt_content"]     = cfg.wk_security_txt_content;
 
     j["hooks"]["before_build"] = cfg.hook_before_build;
     j["hooks"]["after_build"]  = cfg.hook_after_build;

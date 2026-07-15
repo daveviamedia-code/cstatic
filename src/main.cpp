@@ -225,6 +225,10 @@ robots = false
 # include_images = true
 # exclude_types = []
 
+# [well_known]  # AI/plugin discovery files at /.well-known/
+# ai_plugin_enabled = false      # emit /.well-known/ai-plugin.json (OpenAI manifest)
+# security_txt_enabled = false   # emit /.well-known/security.txt (RFC 9116)
+
 [[collection]]
 name = "posts"
 template = "post"

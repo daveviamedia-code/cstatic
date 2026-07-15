@@ -157,6 +157,18 @@ struct Config {
     bool        sitemap_ai_include_images = true;
     std::vector<std::string> sitemap_ai_exclude_types;  // page.type values to drop
 
+    // [well_known.ai_plugin] — OpenAI plugin manifest at /.well-known/ai-plugin.json
+    // (opt-in). name/description fall back to site_title/site_description.
+    bool        wk_ai_plugin_enabled = false;
+    std::string wk_ai_plugin_schema_version = "v1";
+    std::string wk_ai_plugin_name;           // defaults to site_title
+    std::string wk_ai_plugin_description;    // defaults to site_description
+
+    // [well_known.security_txt] — /.well-known/security.txt (opt-in).
+    // Content is written verbatim — author supplies the full RFC 9116 text.
+    bool        wk_security_txt_enabled = false;
+    std::string wk_security_txt_content;
+
     // [hooks]
     std::string hook_before_build;
     std::string hook_after_build;

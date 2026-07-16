@@ -204,6 +204,11 @@ html = true
 enabled = true
 style = "github"
 
+# [build.markdown_mirror]  # emit a raw <url>.md alongside HTML (G15)
+# enabled = false
+# all = false      # mirror every page; else opt-in via `mirror_markdown: true` frontmatter
+# suffix = ".md"
+
 [modules]
 sitemap = true
 rss = false

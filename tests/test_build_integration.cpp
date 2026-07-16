@@ -1214,3 +1214,119 @@ TEST_CASE_METHOD(BuildFixture, "Incremental: title change on one page invalidate
     REQUIRE(r2.pages_built >= 2);
     REQUIRE(read_output("a/index.html").find("Beta Renamed") != std::string::npos);
 }
+
+TEST_CASE_METHOD(BuildFixture, "G15: per-page markdown mirror", "[integration][mirror]") {
+    write_template("default.html",
+        "<html><head>{{ seo_meta }}</head><body>{{ page.content }}</body></html>");
+
+    SECTION("frontmatter mirror_markdown emits .md + alternate link") {
+        write_source("posts/hello.md",
+            "---\ntitle: Hello\nmirror_markdown: true\n---\n# Hello\n\nWorld paragraph.\n");
+        auto cfg = make_config();
+        cfg.markdown_mirror_enabled = true;
+        cfg.minify_html = false;
+
+        auto r = build_site(cfg, true);
+        REQUIRE(r.pages_built >= 1);
+        REQUIRE(output_exists("posts/hello/index.html"));
+        REQUIRE(output_exists("posts/hello/index.md"));
+
+        // Alternate link advertises the mirror (absolute, with base_url).
+        std::string html = read_output("posts/hello/index.html");
+        REQUIRE(html.find("<link rel=\"alternate\" type=\"text/markdown\""
+                          " href=\"https://example.com/posts/hello/index.md\">")
+                != std::string::npos);
+
+        // Mirror body is the processed markdown — NOT HTML-rendered: the "#"
+        // heading marker survives, and there is no <h1> tag.
+        std::string md = read_output("posts/hello/index.md");
+        REQUIRE(md.find("# Hello") != std::string::npos);
+        REQUIRE(md.find("<h1") == std::string::npos);
+        REQUIRE(md.find("World paragraph.") != std::string::npos);
+    }
+
+    SECTION("mirror_all mirrors every page regardless of frontmatter") {
+        write_source("posts/a.md", "---\ntitle: A\n---\nA body.\n");
+        write_source("about.md", "---\ntitle: About\n---\nAbout body.\n");
+        auto cfg = make_config();
+        cfg.markdown_mirror_enabled = true;
+        cfg.markdown_mirror_all = true;
+        cfg.minify_html = false;
+
+        build_site(cfg, true);
+        REQUIRE(output_exists("posts/a/index.md"));
+        REQUIRE(output_exists("about/index.md"));
+
+        // Both pages advertise their mirrors.
+        REQUIRE(read_output("posts/a/index.html").find("text/markdown")
+                != std::string::npos);
+        REQUIRE(read_output("about/index.html").find("text/markdown")
+                != std::string::npos);
+    }
+
+    SECTION("disabled by default: no mirror files or links") {
+        write_source("posts/hello.md",
+            "---\ntitle: Hello\nmirror_markdown: true\n---\n# Hello\n");
+        auto cfg = make_config();  // mirror not enabled
+        cfg.minify_html = false;
+
+        build_site(cfg, true);
+        REQUIRE_FALSE(output_exists("posts/hello/index.md"));
+        REQUIRE(read_output("posts/hello/index.html").find("text/markdown")
+                == std::string::npos);
+    }
+
+    SECTION("enabled but page not opted in: no mirror for that page") {
+        write_source("posts/opted.md",
+            "---\ntitle: Opted\nmirror_markdown: true\n---\nBody.\n");
+        write_source("posts/plain.md", "---\ntitle: Plain\n---\nBody.\n");
+        auto cfg = make_config();
+        cfg.markdown_mirror_enabled = true;  // all = false
+        cfg.minify_html = false;
+
+        build_site(cfg, true);
+        REQUIRE(output_exists("posts/opted/index.md"));
+        REQUIRE_FALSE(output_exists("posts/plain/index.md"));
+        // Only the opted-in page carries the alternate link.
+        REQUIRE(read_output("posts/opted/index.html").find("text/markdown")
+                != std::string::npos);
+        REQUIRE(read_output("posts/plain/index.html").find("text/markdown")
+                == std::string::npos);
+    }
+
+    SECTION("custom suffix is honored") {
+        write_source("posts/hello.md",
+            "---\ntitle: Hello\nmirror_markdown: true\n---\n# Hello\n");
+        auto cfg = make_config();
+        cfg.markdown_mirror_enabled = true;
+        cfg.markdown_mirror_suffix = ".markdown";
+        cfg.minify_html = false;
+
+        build_site(cfg, true);
+        REQUIRE(output_exists("posts/hello/index.markdown"));
+        REQUIRE_FALSE(output_exists("posts/hello/index.md"));
+        REQUIRE(read_output("posts/hello/index.html").find(
+                    "href=\"https://example.com/posts/hello/index.markdown\">")
+                != std::string::npos);
+    }
+
+    SECTION("incremental build preserves mirror files (no asset-orphan removal)") {
+        write_source("posts/hello.md",
+            "---\ntitle: Hello\nmirror_markdown: true\n---\n# Hello\n");
+        auto cfg = make_config();
+        cfg.markdown_mirror_enabled = true;
+        cfg.minify_html = false;
+
+        build_site(cfg, true);
+        REQUIRE(output_exists("posts/hello/index.md"));
+
+        // Second build is incremental (no source changes) — the page is
+        // served from cache. The mirror file must survive: neither the HTML
+        // orphan cleanup nor the asset-pipeline orphan cleanup may remove it.
+        auto r2 = build_site(cfg, false);
+        REQUIRE(r2.pages_cached >= 1);
+        REQUIRE(output_exists("posts/hello/index.md"));
+        std::string md = read_output("posts/hello/index.md");
+        REQUIRE(md.find("# Hello") != std::string::npos);
+    }
+}

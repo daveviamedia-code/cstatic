@@ -889,6 +889,15 @@ AssetResult process_assets(const Config& cfg, HashStore& hashes,
             std::string path = entry.path().string();
             // Only consider non-.html files for asset orphan cleanup
             if (get_extension(path) == ".html") continue;
+            // G15: skip generated markdown mirror files (named exactly
+            // "index" + mirror suffix) — they're managed by the builder, not
+            // the asset pipeline. User-authored .md assets stay cleanable:
+            // they're in `active` when present, and only the generator form
+            // is skipped here.
+            if (cfg.markdown_mirror_enabled && !cfg.markdown_mirror_suffix.empty() &&
+                entry.path().filename().string() == "index" + cfg.markdown_mirror_suffix) {
+                continue;
+            }
             if (active.find(path) == active.end()) {
                 // Check if this file's relative path would have come from static/
                 std::string rel_to_output;

@@ -122,6 +122,19 @@ struct PageRecord {
     std::vector<std::string> deps;       // hash keys this page depends on
 };
 
+// G15: Derive a markdown mirror output path from a page's HTML output path by
+// replacing the trailing .html extension with the configured suffix. Produces
+// e.g. "output/posts/hello/index.md" from "output/posts/hello/index.html".
+static std::string mirror_output_path(const std::string& html_path,
+                                       const std::string& suffix) {
+    static const std::string ext = ".html";
+    if (html_path.size() >= ext.size() &&
+        html_path.compare(html_path.size() - ext.size(), ext.size(), ext) == 0) {
+        return html_path.substr(0, html_path.size() - ext.size()) + suffix;
+    }
+    return html_path + suffix;
+}
+
 // Build an HTML string of SEO meta tags (Open Graph, Twitter Card, canonical link).
 // Injected into templates as {{ seo_meta }}.
 static std::string build_seo_meta(
@@ -599,6 +612,8 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
         int collection_idx = -1;   // index into cfg.collections (-1 = none)
         std::vector<Wikilink> outgoing_links;  // populated in 1b when wikilinks are on
         bool render_failed = false;            // markdown render error in 1b
+        std::string mirror_body;               // G15: processed markdown (pre HTML render)
+        bool mirror_wanted = false;            // G15: page should emit a .md mirror
     };
 
     std::vector<RawPage> raw_pages;
@@ -831,6 +846,22 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
             link_graph.add_outgoing(rp.url, rp.outgoing_links);
         }
 
+        // G15: Per-page markdown mirror. Capture the fully-processed body
+        // (shortcodes, schema blocks, FAQ, and wikilinks resolved — not yet
+        // HTML-rendered) so a raw <url>.md can be emitted alongside the HTML.
+        // mirror_all mirrors every page; otherwise pages opt in via
+        // `mirror_markdown: true` frontmatter (kept in frontmatter.custom).
+        if (cfg.markdown_mirror_enabled) {
+            rp.mirror_body = body;
+            rp.mirror_wanted = cfg.markdown_mirror_all;
+            if (!rp.mirror_wanted) {
+                auto it = rp.parsed.frontmatter.custom.find("mirror_markdown");
+                if (it != rp.parsed.frontmatter.custom.end() && it->is_boolean()) {
+                    rp.mirror_wanted = it->get<bool>();
+                }
+            }
+        }
+
         try {
             rp.html_content = render_markdown(body, md_opts);
         } catch (const std::exception& e) {
@@ -947,6 +978,10 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
     // --- Phase 1.5: Apply markdown pagination rules ---
     std::vector<CachedOutput> all_outputs;
     std::vector<PageRecord> all_records;
+    // G15: markdown mirror outputs (<url>.md) + active-path set for orphan cleanup.
+    struct MirrorOutput { std::string output_path; std::string body; };
+    std::vector<MirrorOutput> mirror_outputs;
+    std::unordered_set<std::string> mirror_active_paths;
     // For each pagination rule, collect matching pages and generate paginated index pages.
     {
         for (const auto& rule : cfg.pagination_rules) {
@@ -1569,6 +1604,17 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
                     seo_meta += modules::seo_schema::build_citation_tags(cfg, schema_page);
                 }
             }
+            // G15: advertise the markdown mirror via <link rel="alternate">.
+            if (rp.mirror_wanted) {
+                std::string mirror_url = rp.url;
+                if (!mirror_url.empty() && mirror_url.back() == '/') {
+                    mirror_url += "index";
+                }
+                mirror_url += cfg.markdown_mirror_suffix;
+                seo_meta += "<link rel=\"alternate\" type=\"text/markdown\" href=\""
+                          + utils::xml_escape(cfg.site_base_url + mirror_url)
+                          + "\">\n";
+            }
             ctx["seo_meta"] = seo_meta;
 
             try {
@@ -1630,10 +1676,22 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
             if (was_rendered[render_idx]) {
                 all_outputs.push_back({rp.output_path, rendered_html[render_idx]});
                 result.pages_built++;
+                // G15: schedule a mirror file write for re-rendered mirror pages.
+                if (rp.mirror_wanted) {
+                    mirror_outputs.push_back({mirror_output_path(rp.output_path,
+                                              cfg.markdown_mirror_suffix),
+                                              rp.mirror_body});
+                }
             }
             render_idx++;
         } else {
             result.pages_cached++;
+        }
+        // Track every active mirror path (rendered + cached) so incremental
+        // orphan cleanup keeps mirror files for pages served from cache.
+        if (rp.mirror_wanted) {
+            mirror_active_paths.insert(mirror_output_path(rp.output_path,
+                                       cfg.markdown_mirror_suffix));
         }
 
         PageRecord rec;
@@ -1883,25 +1941,48 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
             utils::write_file(out.output_path, out.html);
         }
 
-        // Remove orphaned HTML outputs (pages whose source was deleted).
-        // Only remove .html files here — the asset pipeline handles its own orphans.
+        // Remove orphaned HTML + markdown-mirror outputs (pages whose source
+        // was deleted). Only remove .html files and generated mirror files
+        // here — the asset pipeline handles its own orphans.
         std::unordered_set<std::string> active_outputs;
         for (const auto& rec : all_records) {
             active_outputs.insert(rec.output_path);
         }
+        // G15: mirror files for cached pages are also active outputs.
+        for (const auto& mp : mirror_active_paths) {
+            active_outputs.insert(mp);
+        }
+        // A mirror file is only a removal candidate when it is named exactly
+        // "index" + suffix (the form we generate); user-authored .md static
+        // files are left untouched.
+        const std::string& msuf = cfg.markdown_mirror_suffix;
+        std::string mirror_basename = "index" + msuf;
+        bool mirror_enabled = cfg.markdown_mirror_enabled && !msuf.empty();
 
         if (fs::exists(cfg.output_dir)) {
             for (const auto& entry : fs::recursive_directory_iterator(cfg.output_dir)) {
                 if (!entry.is_regular_file()) continue;
                 std::string path = entry.path().string();
-                // Only clean up HTML files — assets are managed separately
-                if (path.size() < 5 || path.substr(path.size() - 5) != ".html") continue;
+                bool is_html = path.size() >= 5 &&
+                               path.compare(path.size() - 5, 5, ".html") == 0;
+                bool is_mirror = mirror_enabled &&
+                                 path.size() >= msuf.size() &&
+                                 path.compare(path.size() - msuf.size(),
+                                              msuf.size(), msuf) == 0 &&
+                                 entry.path().filename() == mirror_basename;
+                if (!is_html && !is_mirror) continue;
                 if (active_outputs.find(path) == active_outputs.end()) {
                     fs::remove(path);
-                    result.pages_removed++;
+                    if (is_html) result.pages_removed++;
                 }
             }
         }
+    }
+
+    // G15: write markdown mirror files (<url>.md) after HTML so they land in
+    // directories that already exist (and survive the full-rebuild wipe).
+    for (const auto& m : mirror_outputs) {
+        utils::write_file(m.output_path, m.body);
     }
 
     auto t_phase3 = std::chrono::high_resolution_clock::now();

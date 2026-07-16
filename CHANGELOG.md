@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-07-16
+
+### Added
+- Per-page markdown mirror (G15). When `build.markdown_mirror.enabled = true`, C-Static emits a raw `<url>.md` file alongside the HTML so AI crawlers and RAG pipelines that prefer markdown can consume it directly. The mirror body contains the fully-processed markdown — shortcodes, schema blocks, standalone FAQ, and wikilinks resolved — but is NOT passed through the HTML renderer (so `# Heading` stays as `# Heading`, not `<h1>`). Mirror every page with `build.markdown_mirror.all = true`, or opt in individual pages with `mirror_markdown: true` frontmatter. The output filename is `index` + `build.markdown_mirror.suffix` (default `.md`, configurable — e.g. `.markdown`) sitting next to `index.html`. Mirrored pages also gain a `<link rel="alternate" type="text/markdown" href="<absolute-url>">` tag in `<head>` (resolved against `site.base_url`) advertising the mirror. Incremental builds preserve mirror files for cached pages and remove stale ones when a source is deleted — both the HTML orphan cleanup (which tracks active mirror paths) and the asset-pipeline orphan cleanup (which now skips files named exactly `index` + suffix, since they're builder-generated, not static assets; user-authored `.md` files are never touched). Opt-in and backwards-compatible; existing builds are unaffected unless the flag is set.
+
 ## [0.17.0] - 2026-07-15
 
 ### Added

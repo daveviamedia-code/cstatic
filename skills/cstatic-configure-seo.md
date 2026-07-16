@@ -265,7 +265,27 @@ C-Static can generate a sitemap, RSS feed, JSON Feed, robots.txt, and per-page s
 
     `ai-plugin.json` derives `name_for_human` from `ai_plugin_name` (default `site.title`), `name_for_model` from the slugified name, description from `ai_plugin_description` (default `site.description`), `logo_url` from `seo.org_logo` resolved against the base URL (omitted when unset), `auth: {type: "none"}` (static sites have no authenticated API), and `api: {type: "openapi", url: <base_url>/openapi.json}` — drop a `static/openapi.json` if you want a live contract. `security.txt` is written **verbatim** from `security_txt_content` (author supplies the full RFC 9116 text). When both flags are off, no `.well-known/` directory is created.
 
-17. **Build:** `cstatic build`.
+17. **Per-page markdown mirror (`build.markdown_mirror.*`, default off).** Emits a raw `<url>.md` next to the HTML so AI crawlers / RAG pipelines that prefer markdown can consume it directly. The mirror body is the fully-processed markdown (shortcodes, schema blocks, standalone `##?` FAQ, and wikilinks all resolved) but is NOT HTML-rendered — a `# Heading` stays as `# Heading`, not `<h1>`.
+
+    ```toml
+    [build.markdown_mirror]
+    enabled = true
+    all = false       # mirror every page; else opt-in per page (see below)
+    suffix = ".md"    # produces <dir>/index.md beside <dir>/index.html
+    ```
+
+    Per-page opt-in (when `all = false`):
+
+    ```markdown
+    ---
+    title: My Post
+    mirror_markdown: true
+    ---
+    ```
+
+    Mirrored pages also gain `<link rel="alternate" type="text/markdown" href="<base_url>/<page-url>/index.md">` in `<head>`. Incremental orphan cleanup only removes mirror files named exactly `index` + `suffix` — user-authored `.md` files under `static/` are never touched. Markdown pages only (data-driven pages have no markdown body).
+
+18. **Build:** `cstatic build`.
 
 ## Gotchas
 
@@ -283,4 +303,5 @@ C-Static can generate a sitemap, RSS feed, JSON Feed, robots.txt, and per-page s
 - **`json_ld_enabled` is under `[seo]`, not `[modules]`**: the scaffold's commented hint correctly sits under the `[seo]` table; the reader key is `seo.json_ld_enabled`. The `[authors]` table is separate (`authors.enabled`) and gates only the author entity system (resolution + profile pages), independent of JSON-LD. (Older scaffolds misplaced the comment under `[modules]` — uncommenting it there silently did nothing.)
 - **Brand validation is always on when `org_name` is set** — no separate flag to enable/suppress. Warnings are non-fatal (print to stderr, don't fail the build). The `{{ site.org }}` variable (not top-level `{{ org }}`) is available in all templates when `org_name` is non-empty, regardless of `json_ld_enabled`.
 - **`sitemap_ai` filters are cumulative** (all must pass): inherits `sitemap.exclude`, hardcodes `/tags/`+`/categories/`+`/page/` URL drops, requires `word_count > 100`, and checks `sitemap_ai.exclude_types`. The `word_count` gate naturally excludes taxonomy/listing pages (they lack `word_count`) and data-driven pages (G12 only runs on the markdown path). `include_images = true` (default) resolves relative image URLs to absolute via `site.base_url`; the `xmlns:image` namespace is only declared when at least one included page actually has images.
+- **Markdown mirror body is pre-render markdown** (not raw source): the `<url>.md` reflects the body AFTER shortcodes, `{% schema %}` blocks, standalone `##?` FAQ, and `[[wikilinks]]` are resolved, but BEFORE the cmark-gfm HTML render pass. So emitted schema/FAQ HTML blocks (e.g. `<section class="faq">…`) appear in the mirror as raw HTML (valid markdown), while `# Heading` markers stay as `#` (not `<h1>`). Mirror is markdown-page-only — data-driven pages have no markdown body. The mirror `href` in `<link rel="alternate">` is absolute (`base_url` + page URL + `index` + suffix); it's root-relative when `base_url` is empty.
 - **`.well-known` keys are flat under one table**: use `[well_known]` with bare keys (`ai_plugin_enabled`, `security_txt_enabled`, etc.) — the reader traverses `well_known.<key>` from the root, so a `[well_known]` header + bare keys works, as does root-level `well_known.ai_plugin_enabled = true`. `security_txt_content` is written verbatim (no templating/escaping); `ai-plugin.json`'s `api.url` always points at `<base_url>/openapi.json` regardless of whether that file exists (drop a `static/openapi.json` to make it real). `logo_url` rides on `seo.org_logo` — there is no separate `well_known` logo key.

@@ -466,7 +466,7 @@ std::string wk_security_txt_content;    // raw, written verbatim
 
 ---
 
-### G15. Per-Page Markdown Mirror
+### G15. Per-Page Markdown Mirror   DONE
 
 **Approach**: Emit `<url>.md` alongside HTML for pages with `mirror_markdown: true` frontmatter or globally via config. Some crawlers (and many RAG pipelines) prefer raw markdown.
 

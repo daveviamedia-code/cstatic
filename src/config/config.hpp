@@ -73,6 +73,17 @@ struct Config {
     // render context gains `page.backlinks` (array of {url, title}).
     bool wikilinks_enabled = false;
 
+    // [build.markdown_mirror]
+    // Emit a raw <url>.md alongside the HTML for pages with
+    // `mirror_markdown: true` frontmatter (or every page when
+    // markdown_mirror_all = true). Some AI crawlers and RAG pipelines prefer
+    // raw markdown. A <link rel="alternate" type="text/markdown"> tag is added
+    // to <head> for mirrored pages. The mirror body has shortcodes, schema
+    // blocks, FAQ, and wikilinks resolved but is NOT HTML-rendered.
+    bool        markdown_mirror_enabled = false;
+    bool        markdown_mirror_all     = false;  // mirror every page; else opt-in
+    std::string markdown_mirror_suffix  = ".md";  // produces <dir>/index.md
+
     // [og_images]
     bool        og_images_enabled       = false;
     std::string og_images_template      = "og-default";   // SVG template name (no .svg)

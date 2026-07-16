@@ -248,6 +248,11 @@ Config load_config(const std::string& path, const std::string& env) {
     cfg.shortcodes_dir      = optional_string(tbl,      "build.markdown.shortcodes_dir", cfg.shortcodes_dir);
     cfg.wikilinks_enabled   = optional_bool(tbl,        "build.markdown.wikilinks",       cfg.wikilinks_enabled);
 
+    // --- [build.markdown_mirror] ---
+    cfg.markdown_mirror_enabled = optional_bool(tbl,   "build.markdown_mirror.enabled", cfg.markdown_mirror_enabled);
+    cfg.markdown_mirror_all     = optional_bool(tbl,   "build.markdown_mirror.all",     cfg.markdown_mirror_all);
+    cfg.markdown_mirror_suffix  = optional_string(tbl, "build.markdown_mirror.suffix",  cfg.markdown_mirror_suffix);
+
     // --- [og_images] ---
     cfg.og_images_enabled       = optional_bool(tbl,   "og_images.enabled",       cfg.og_images_enabled);
     cfg.og_images_template      = optional_string(tbl, "og_images.template",      cfg.og_images_template);
@@ -438,6 +443,9 @@ std::string config_to_json(const Config& cfg) {
     j["build"]["markdown"]["extensions"]     = cfg.markdown_extensions;
     j["build"]["markdown"]["shortcodes_dir"] = cfg.shortcodes_dir;
     j["build"]["markdown"]["wikilinks"]      = cfg.wikilinks_enabled;
+    j["build"]["markdown_mirror"]["enabled"] = cfg.markdown_mirror_enabled;
+    j["build"]["markdown_mirror"]["all"]     = cfg.markdown_mirror_all;
+    j["build"]["markdown_mirror"]["suffix"]  = cfg.markdown_mirror_suffix;
 
     j["og_images"]["enabled"]       = cfg.og_images_enabled;
     j["og_images"]["template"]      = cfg.og_images_template;

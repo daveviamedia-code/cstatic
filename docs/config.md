@@ -448,6 +448,36 @@ aliases = ["/old-path/", "legacy-name"]
 
 ---
 
+## `[build.markdown_mirror]` — Per-Page Markdown Mirror (G15)
+
+Emit a raw `<url>.md` file alongside each page's HTML so AI crawlers and RAG pipelines that prefer markdown can consume it directly. The mirror body holds the fully-processed markdown — shortcodes, schema blocks, standalone `##?` FAQ, and wikilinks all resolved — but is **not** passed through the HTML renderer, so a `# Heading` stays as `# Heading` rather than `<h1>`. Each mirrored page also gains a `<link rel="alternate" type="text/markdown" href="…">` tag in `<head>` (resolved against `site.base_url`) advertising the mirror.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `enabled` | bool | `false` | Turn the mirror feature on |
+| `all` | bool | `false` | Mirror every page; otherwise pages opt in via `mirror_markdown: true` frontmatter |
+| `suffix` | string | `".md"` | Output filename suffix — produces `<dir>/index` + suffix next to `index.html` (e.g. `.markdown`) |
+
+```toml
+[build.markdown_mirror]
+enabled = true
+all = false       # opt-in per page (set true to mirror every page)
+suffix = ".md"
+```
+
+Per-page opt-in:
+
+```markdown
+---
+title: My Post
+mirror_markdown: true
+---
+```
+
+**Orphan cleanup** — incremental builds remove stale mirror files (only files named exactly `index` + suffix, the form C-Static generates). User-authored `.md` files copied into `output/` via `static/` are never touched.
+
+---
+
 ## `[og_images]` — Open Graph Image Generation
 
 Generate a social-card image per page by rendering an Inja SVG template, then (optionally) converting it to PNG. The generated image URL is injected into the page's `{{ seo_meta }}` `og:image` tag (when the page has no explicit `image` frontmatter), into `sitemap.xml`, and into the RSS feed.
@@ -1297,6 +1327,7 @@ These optional frontmatter fields enrich the generated `<meta>` tags and sitemap
 | `canonical` | Canonical URL override. Defaults to `site.base_url + page.url`. |
 | `sitemap_changefreq` | Sitemap `<changefreq>` value (e.g. `"monthly"`, `"weekly"`). |
 | `sitemap_priority` | Sitemap `<priority>` value (e.g. `"0.8"`). Accepts numeric or string. |
+| `mirror_markdown` | When `build.markdown_mirror.enabled = true` and `all = false`, set to `true` to emit a `<url>.md` mirror for this page (see [Markdown Mirror](#buildmarkdown_mirror--per-page-markdown-mirror-g15)). |
 
 ```markdown
 ---
@@ -1318,6 +1349,7 @@ When you include `{{ seo_meta }}` in a template (typically inside `<head>`), C-S
 - `<meta name="twitter:card">` (`summary_large_image` if image present, else `summary`)
 - `<meta name="twitter:site">` (if `site.twitter_handle` is set)
 - `<link rel="canonical">`
+- `<link rel="alternate" type="text/markdown">` (only on mirrored pages — see [Markdown Mirror](#buildmarkdown_mirror--per-page-markdown-mirror-g15))
 - `<script type="application/ld+json">` Schema.org blocks (only when `seo.json_ld_enabled = true` — see [JSON-LD Options](#json-ld-options))
 
 All attribute values are XML-escaped. Inja renders missing variables as empty strings, so adding `{{ seo_meta }}` to existing templates is always safe.

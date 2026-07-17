@@ -22,6 +22,7 @@ set(LIB_SOURCES
     ${CMAKE_SOURCE_DIR}/src/content/readability.cpp
     ${CMAKE_SOURCE_DIR}/src/content/schema_blocks.cpp
     ${CMAKE_SOURCE_DIR}/src/content/shortcodes.cpp
+    ${CMAKE_SOURCE_DIR}/src/content/sources_block.cpp
     ${CMAKE_SOURCE_DIR}/src/content/toc.cpp
     ${CMAKE_SOURCE_DIR}/src/data/data_loader.cpp
     ${CMAKE_SOURCE_DIR}/src/hash/hash_store.cpp
@@ -68,6 +69,7 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/tests/test_llms_txt.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_seo_schema.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_schema_blocks.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_sources_block.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_authors_index.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_sitemap_ai.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_well_known.cpp

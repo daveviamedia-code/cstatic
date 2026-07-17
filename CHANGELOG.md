@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-07-17
+
+### Added
+- `{% sources %}` shortcode (G16). Authors a visible numbered source list inline in markdown and emits matching Schema.org structured data so AI engines (Perplexity, ChatGPT, Google AI Overviews) and Google Scholar weight cited references. Each `{% sources %}...{% endsources %}` block accepts one entry per line — either a markdown link (`- [text](url)`, with an optional trailing annotation like ` — Smith 2023` that is kept in the visible HTML only) or a bare URL (`https://example.com/...`) which is autolinked with the URL as its text. The visible output is an `<ol class="sources">` with one `<li>` per entry; URLs are XML-escaped. The JSON-LD output (gated by the existing `seo.json_ld_enabled` flag from G3) is a `CreativeWork` with a `citations` array of `{@type:"CreativeWork", name, url}` objects — bare-URL entries omit `name` so the URL isn't duplicated. Each block emits its own CreativeWork; across multiple blocks, every recognized entry also accumulates into a `{{ page.sources }}` template variable of `{text, url, note}` objects for custom rendering. Pairs naturally with G7 (citation meta tags): G7 covers in-page citation metadata via frontmatter; G16 covers inline source lists authored in the body. No new config flag (pure syntax opt-in like G4/G5); the visible HTML always emits, the JSON-LD only emits when `json_ld_enabled` is on. Empty/unrecognized blocks fall back to a `warn:` and pass content through with no schema.
+
 ## [0.18.0] - 2026-07-16
 
 ### Added

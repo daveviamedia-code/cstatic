@@ -285,7 +285,18 @@ C-Static can generate a sitemap, RSS feed, JSON Feed, robots.txt, and per-page s
 
     Mirrored pages also gain `<link rel="alternate" type="text/markdown" href="<base_url>/<page-url>/index.md">` in `<head>`. Incremental orphan cleanup only removes mirror files named exactly `index` + `suffix` — user-authored `.md` files under `static/` are never touched. Markdown pages only (data-driven pages have no markdown body).
 
-18. **Build:** `cstatic build`.
+18. **Sources block (no config flag; pure markdown syntax).** `{% sources %}...{% endsources %}` authors a visible numbered source list inline and emits matching Schema.org structured data so AI engines (Perplexity, ChatGPT, Google AI Overviews) and Google Scholar weight cited references. Pairs with citation meta tags (step 9) — G7 covers in-page citation metadata via frontmatter; G16 covers inline source lists authored in the body.
+
+    ```markdown
+    {% sources %}
+    - [Why X is better than Y](https://example.com/study) — Smith 2023
+    - https://doi.org/10.1000/xyz123
+    {% endsources %}
+    ```
+
+    Each inner line is one entry — either a markdown link (`- [text](url)`, with an optional trailing annotation like ` — Smith 2023` kept in the visible HTML only, NOT copied into the citation's `name`) or a bare URL (`https://example.com/...`, autolinked with the URL as its text). List markers (`-`/`*`/`+`) are optional; blank/unrecognized lines are skipped silently. Visible output: `<ol class="sources">` with `<li><a href="URL">TEXT</a> NOTE</li>` per entry (URLs XML-escaped). JSON-LD output (gated by `seo.json_ld_enabled` from step 1): a `CreativeWork` with a `citations` array of `{@type:"CreativeWork", name, url}` objects — bare-URL entries omit `name` so the URL isn't duplicated. Each block emits its own `CreativeWork`; across multiple blocks every recognized entry also accumulates into `{{ page.sources }}` (`[{text, url, note}]`) for custom layouts. A block with no recognizable entries `warn:`s and passes the inner content through.
+
+19. **Build:** `cstatic build`.
 
 ## Gotchas
 
@@ -298,6 +309,7 @@ C-Static can generate a sitemap, RSS feed, JSON Feed, robots.txt, and per-page s
 - JSON-LD is **off by default** — existing builds are unchanged until you set `seo.json_ld_enabled = true`. The `BlogPosting` default is inferred only for URLs under `/posts/...`; use `type: Article` (etc.) in frontmatter to override.
 - JSON-LD `page.schema` deep-merges: auto-generated fields (`headline`, `datePublished`, `author`, `image`, `url`...) are preserved; only the keys you list are overridden. Use `schema_extra` (array) when you need entirely separate top-level schemas (FAQ, Event, etc.).
 - **FAQ authoring shortcut**: `##? question` headings anywhere in a page (no `{% schema %}` wrapper needed) auto-build a `FAQPage` — visible `<details>` HTML inline + a `FAQPage` JSON-LD merged into `schema_extra` + a `{{ page.faq }}` array. Wraps with `{% schema "FAQPage" %}` are still supported and merge into the same single `FAQPage`. Standalone FAQ is terminal (answers run to the next `##?` or end of body) — place it last on the page.
+- **Sources block**: `{% sources %}...{% endsources %}` always emits the visible `<ol class="sources">` HTML, but the `CreativeWork` JSON-LD only emits when `seo.json_ld_enabled = true` (step 1). Markdown-link annotations (text after the `](url)`) stay in the visible HTML only — they are NOT copied into the citation's `name`. Bare-URL entries (`https://...`) omit `name` from the citation so the URL isn't duplicated. If a page has both `{% sources %}` blocks AND `mirror_markdown: true`, the mirror `.md` captures the body AFTER the sources processor runs — so the mirror contains the emitted `<ol class="sources">` HTML, not the original `{% sources %}` tags.
 - **Author files are entities, not pages**: when `authors.enabled = true`, `src/authors/*.md` are loaded into the author index and **excluded** from the regular markdown page collection. Don't expect them to appear in `{{ pages }}` or render with the default template — they render via `templates/author.html` at `/<slug>/`.
 - **Passage IDs and TOC IDs are aligned**: both G8 (passage index) and G11 (auto TOC) use the same shared `utils::slugify` to generate heading IDs. G11 injects matching `id="..."` attributes into rendered `<h2>`–`<h6>` tags so `#passage-id` anchor links and JSON-LD `hasPart[].url` targets resolve in browsers. Headings with pre-existing `id` attributes are preserved by G11 (but G8 still computes from text — rare edge case).
 - **`json_ld_enabled` is under `[seo]`, not `[modules]`**: the scaffold's commented hint correctly sits under the `[seo]` table; the reader key is `seo.json_ld_enabled`. The `[authors]` table is separate (`authors.enabled`) and gates only the author entity system (resolution + profile pages), independent of JSON-LD. (Older scaffolds misplaced the comment under `[modules]` — uncommenting it there silently did nothing.)

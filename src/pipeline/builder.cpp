@@ -9,6 +9,7 @@
 #include "content/readability.hpp"
 #include "content/toc.hpp"
 #include "content/schema_blocks.hpp"
+#include "content/sources_block.hpp"
 #include "content/shortcodes.hpp"
 #include "data/data_loader.hpp"
 #include "hash/hash_store.hpp"
@@ -597,6 +598,10 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
     // parsing, no state. A no-op pass-through on bodies with no schema blocks.
     SchemaBlockProcessor schema_block_processor;
 
+    // G16: Sources-block processor ({% sources %}...{% endsources %}) — pure
+    // parsing, no state. A no-op pass-through on bodies with no sources blocks.
+    SourcesBlockProcessor sources_block_processor;
+
     // Wikilink resolver — built across Phase 1a (indexing) and read-only in
     // Phase 2 (backlinks). Single-threaded population; multi-threaded reads.
     LinkGraph link_graph;
@@ -835,6 +840,29 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
                     custom["schema_extra"] = nlohmann::json::array();
                 }
                 merge_faq_into_schema_extra(custom["schema_extra"], sfaq.questions);
+            }
+        }
+
+        // G16: {% sources %}...{% endsources %} block. Emits a visible
+        // <ol class="sources"> numbered list and pushes a CreativeWork schema
+        // with a `citations` array into schema_extra. Also exposes
+        // {{ page.sources }} (one entry per recognized source across all
+        // blocks) for custom template rendering. Runs before wikilinks /
+        // render_markdown so the emitted raw HTML survives into the final
+        // document.
+        {
+            std::vector<nlohmann::json> sources_schemas;
+            nlohmann::json sources_ctx;
+            body = sources_block_processor.process(body, sources_schemas, sources_ctx);
+            if (!sources_schemas.empty()) {
+                auto& custom = rp.parsed.frontmatter.custom;
+                custom["sources"] = sources_ctx;
+                if (!custom.contains("schema_extra") || !custom["schema_extra"].is_array()) {
+                    custom["schema_extra"] = nlohmann::json::array();
+                }
+                for (auto& s : sources_schemas) {
+                    custom["schema_extra"].push_back(std::move(s));
+                }
             }
         }
 

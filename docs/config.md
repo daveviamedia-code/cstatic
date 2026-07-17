@@ -398,6 +398,21 @@ Each question also populates a `{{ page.faq }}` array (`[{question, answer_html,
 
 If a page has **both** a `{% schema "FAQPage" %}` block and trailing standalone `##?` questions, the two are merged into ONE `FAQPage` whose `mainEntity` holds every question — AI engines see a single coherent Q&A document. Answer-boundary semantics match the schema block (an answer runs to the next `##?` or end of body), so standalone FAQ is **terminal content** — place it last on the page. No config flag (pure opt-in syntax).
 
+#### Sources block
+
+`{% sources %}...{% endsources %}` authors a visible numbered source list inline and emits matching Schema.org structured data so AI engines (Perplexity, ChatGPT, Google AI Overviews) and Google Scholar weight cited references. Each inner line is one entry — either a markdown link (with an optional trailing annotation that stays in the visible HTML only) or a bare URL (autolinked):
+
+```markdown
+{% sources %}
+- [Why X is better than Y](https://example.com/study) — Smith 2023
+- https://doi.org/10.1000/xyz123
+{% endsources %}
+```
+
+The visible output is an `<ol class="sources">` with one `<li>` per entry (`<li><a href="URL">TEXT</a> NOTE</li>`). The JSON-LD output is a `CreativeWork` with a `citations` array of `{@type:"CreativeWork", name, url}` objects — bare-URL entries omit `name` so the URL isn't duplicated. JSON-LD emission is gated by the existing `seo.json_ld_enabled` flag; visible HTML always renders.
+
+Each block emits its own `CreativeWork`; across multiple blocks, every recognized entry also accumulates into `{{ page.sources }}` (an array of `{text, url, note}` objects) for custom template rendering. List markers (`-`/`*`/`+`) are optional. Empty lines and unrecognized lines are skipped silently; a block with no recognizable entries `warn:`s on stderr and passes the inner content through without emitting a schema. Pairs naturally with citation meta tags (G7) — G7 covers in-page citation metadata via frontmatter, G16 covers inline source lists authored in the body. No config flag (pure opt-in syntax, like `{% schema %}` blocks and standalone `##?`).
+
 ### Wikilinks & Backlinks
 
 Wikilinks provide a slug-or-title shorthand for cross-referencing pages, and the build automatically exposes the reverse relationship (`page.backlinks`) to templates. Enable with:

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(cstatic VERSION 0.18.0 LANGUAGES CXX)
+project(cstatic VERSION 0.19.0 LANGUAGES CXX)
 
 # Policy override for dependency compatibility (yaml-cpp requires older CMake minimum)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE INTERNAL "")
@@ -99,6 +99,7 @@ add_executable(cstatic
     src/content/readability.cpp
     src/content/schema_blocks.cpp
     src/content/shortcodes.cpp
+    src/content/sources_block.cpp
     src/content/toc.cpp
     src/data/data_loader.cpp
     src/hash/hash_store.cpp

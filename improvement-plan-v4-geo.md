@@ -490,7 +490,7 @@ std::string markdown_mirror_suffix  = ".md";  // produces /posts/foo/index.md
 
 ---
 
-### G16. `{% sources %}` Shortcode
+### G16. `{% sources %}` Shortcode   DONE
 
 **Approach**: Visible source list + JSON-LD `citation`/`isPartOf`. Pairs with G7.
 

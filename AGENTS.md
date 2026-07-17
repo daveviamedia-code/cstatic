@@ -6,7 +6,7 @@
 
 ## 1. What C-Static is
 
-C-Static is a fast, minimal static site generator written in C++17. It ships as a **single static binary** (`cstatic`) with subcommands `init`, `new`, `build`, `serve`, `check`. No Node.js or Python runtime is required.
+C-Static is a fast, minimal static site generator written in C++17. It ships as a **single static binary** (`cstatic`) with subcommands `init`, `new`, `build`, `serve`, `check`, `geo`. No Node.js or Python runtime is required.
 
 ## 2. Mental model
 
@@ -45,6 +45,7 @@ All commands run from the project root (the directory containing `config.toml`).
 | `cstatic build` | `--full` `--drafts` `-j,--jobs <N>` `-e,--env <name>` `-v,--verbose` `--watch` | Build site → `output/`. See flags below. |
 | `cstatic serve` | `--port <N>` `--drafts` `-e,--env <name>` | Dev server at `http://localhost:3000` with live reload (default port 3000). |
 | `cstatic check` | `--external` `--timeout <ms>` | Verify internal links in `output/` (and optionally external via HTTP HEAD). Exits `1` on issues — gates CI. |
+| `cstatic geo` | _(none)_ | Audit Generative Engine Optimization readiness of `output/` — scores 0–100 across 9 checks (llms.txt, AI robots, JSON-LD, org, authors, citation tags, passage index, AI sitemap, FAQ coverage). Exits `1` on hard issues (missing enabled files, unparseable JSON-LD). Run after `build`. See `docs/config.md` § *GEO Audit*. |
 
 **`build` flags:**
 - `--full` — force clean rebuild, ignore the hash cache.
@@ -203,6 +204,8 @@ In every layout's `<head>`, add `{{ seo_meta }}` — it emits description, Open 
 **`.well-known/` AI discovery** (`well_known.ai_plugin_enabled` and/or `well_known.security_txt_enabled`, both default off). Two independently opt-in generators write to `/.well-known/`: an OpenAI plugin manifest (`ai-plugin.json`) and a `security.txt` (RFC 9116). `ai-plugin.json` derives `name_for_human` from `ai_plugin_name` (default `site.title`), `name_for_model` from the slugified name, description from `ai_plugin_description` (default `site.description`, omitted when empty), `logo_url` from `seo.org_logo` resolved against the base URL (omitted when unset), `auth: {type: "none"}`, and `api: {type: "openapi", url: <base_url>/openapi.json}` — drop a `static/openapi.json` if you want a live contract. `security.txt` is written verbatim from `security_txt_content` (author supplies the full RFC 9116 text). When both are disabled no `.well-known/` directory is created. See `docs/config.md` → `.well-known` Discovery Files.
 
 **Per-page markdown mirror** (`build.markdown_mirror.enabled = true`). Emits a raw `<url>.md` next to the HTML so AI crawlers / RAG pipelines that prefer markdown can consume it directly. The mirror body is the fully-processed markdown — shortcodes, schema blocks, standalone `##?` FAQ, and wikilinks all resolved — but NOT passed through the HTML renderer (a `# Heading` stays `# Heading`, not `<h1>`). `all = true` mirrors every page; otherwise pages opt in via `mirror_markdown: true` frontmatter. The file is named `index` + `suffix` (default `.md`, configurable) sitting beside `index.html`. Mirrored pages also gain `<link rel="alternate" type="text/markdown" href="<base_url>/<page-url>/index.md">` in `<head>`. Incremental orphan cleanup only removes mirror files named exactly `index` + `suffix` — user `.md` static files are untouched. Markdown pages only (data-driven pages have no markdown body). See `docs/config.md` → Per-Page Markdown Mirror.
+
+**Verify GEO readiness** (`cstatic geo`). After enabling any of the features above and running `cstatic build`, run `cstatic geo` to audit the built `output/` and score Generative Engine Optimization 0–100. It runs 9 checks (llms.txt present, AI-robot allowlist complete, JSON-LD parses + has required fields, Organization consistent across pages, author profile pages exist, article pages carry citation meta tags, article pages have a passage `hasPart`, `sitemap-ai.xml` present, FAQ-page count) and prints a scorecard with per-check remediation. Disabled features show as `[--]` and don't count against you. **Hard issues** (exit 1, gate CI): an enabled feature's output file is missing (`llms.txt`, `sitemap-ai.xml`, `robots.txt` when mode ≠ `off`), or JSON-LD that doesn't parse. All other findings are warnings. No flags, no config — it reads your existing GEO config and rescans every run. See `docs/config.md` → GEO Audit.
 
 ### 5.7 Add data-driven pages
 

@@ -13,6 +13,7 @@
 #include "config/config.hpp"
 #include "pipeline/builder.hpp"
 #include "pipeline/link_checker.hpp"
+#include "pipeline/geo_audit.hpp"
 #include "server/dev_server.hpp"
 #include "server/file_watcher.hpp"
 #include "utils/terminal.hpp"
@@ -26,6 +27,7 @@ int cmd_new(const std::string& path, const std::string& kind);
 int cmd_build(bool full_rebuild, bool include_drafts, int jobs, const std::string& env, bool verbose, bool watch);
 int cmd_serve(int port, bool include_drafts, const std::string& env);
 int cmd_check(bool external_flag, int timeout_ms);
+int cmd_geo();
 
 int main(int argc, char** argv) {
     CLI::App app{"C-Static — a high-performance static site generator", "cstatic"};
@@ -80,6 +82,10 @@ int main(int argc, char** argv) {
     check_cmd->add_flag("--external", check_external_flag, "Also verify external links via HTTP HEAD");
     check_cmd->add_option("--timeout", check_timeout_cli, "Per-request HTTP timeout in ms (default: config)");
     check_cmd->callback([&check_external_flag, &check_timeout_cli]() { std::exit(cmd_check(check_external_flag, check_timeout_cli)); });
+
+    // geo subcommand — audit Generative Engine Optimization readiness
+    auto* geo_cmd = app.add_subcommand("geo", "Audit Generative Engine Optimization readiness");
+    geo_cmd->callback([&]() { std::exit(cmd_geo()); });
 
     app.require_subcommand(1);
 
@@ -990,6 +996,26 @@ int cmd_check(bool external_flag, int timeout_ms_cli) {
         }
         std::cout << error_label() << " Found " << r.issues.size() << " broken link(s).\n";
         return 1;
+    } catch (const cstatic::ConfigError& e) {
+        std::cerr << e.what() << "\n";
+        return 1;
+    } catch (const std::runtime_error& e) {
+        std::cerr << error_label() << " " << e.what() << "\n";
+        return 1;
+    } catch (const std::exception& e) {
+        std::cerr << error_label() << " unexpected error: " << e.what() << "\n";
+        return 1;
+    }
+}
+
+int cmd_geo() {
+    try {
+        cstatic::Config cfg = cstatic::load_config("config.toml");
+        std::cout << info_label() << " Running GEO audit on "
+                  << cfg.output_dir << "/ ...\n";
+        auto r = cstatic::pipeline::audit_geo(cfg.output_dir, cfg);
+        std::cout << cstatic::pipeline::format_geo_report(r);
+        return r.hard_count > 0 ? 1 : 0;
     } catch (const cstatic::ConfigError& e) {
         std::cerr << e.what() << "\n";
         return 1;

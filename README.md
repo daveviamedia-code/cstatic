@@ -31,6 +31,7 @@ A fast, minimal static site generator written in C++17.
 - **AI sitemap** — `modules.sitemap_ai` generates a curated `/sitemap-ai.xml` that filters out thin pages (taxonomy listings, paginated indexes, `word_count <= 100`) and optionally embeds `<image:image>` entries for AI crawler discovery
 - **`.well-known/` discovery** — `well_known.ai_plugin_enabled` emits `/ai-plugin.json` (OpenAI manifest; name/description derived from site config) and `well_known.security_txt_enabled` emits `/security.txt` (RFC 9116, verbatim) under `/.well-known/`
 - **Markdown mirror** — `build.markdown_mirror.enabled` emits a raw `<url>.md` alongside the HTML (shortcodes/wikilinks/schema resolved, not HTML-rendered) for AI crawlers and RAG pipelines that prefer markdown; mirrored pages gain a `<link rel="alternate" type="text/markdown">` tag
+- **GEO audit** — `cstatic geo` scores Generative Engine Optimization readiness 0–100 across 9 checks (llms.txt, AI robots, JSON-LD validity, org consistency, author pages, citation tags, passage index, AI sitemap, FAQ coverage) against built output, listing per-check remediation; exits non-zero on hard issues so it can gate CI
 - **OG image generation** — Per-page social-card images from Inja SVG templates, converted to PNG via rsvg-convert/ImageMagick/Inkscape
 - **Content scaffolding** — `cstatic new` creates pages from archetypes (`archetypes/<kind>.md`) with `{{ title }}`, `{{ slug }}`, and `{{ date }}` placeholders
 - **Scheduled publishing** — Pages with a future `date` are automatically skipped until their date arrives (toggle with `build.publish_future`)
@@ -129,6 +130,7 @@ cstatic build --watch      # Rebuild on file changes (stay running until Ctrl+C)
 cstatic build --env production  # Build with config.production.toml overlay
 cstatic check              # Verify internal links in output/ (exits 1 on broken links)
 cstatic check --external   # Also probe external URLs via HTTP HEAD
+cstatic geo                # Audit GEO readiness of output/, score 0–100 (exits 1 on hard issues)
 ```
 
 ## Configuration

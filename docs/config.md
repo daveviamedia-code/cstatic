@@ -1436,3 +1436,31 @@ The `--external` CLI flag overrides `external = false` in config; if either is s
 
 Fragment (`#…`) and query (`?…`) are stripped before resolving internal links. Transport-level failures (DNS, connection refused, timeout, missing HTTPS support in the binary) are reported as warnings on stderr and do **not** fail the check — only HTTP error statuses (`>= 400`) and missing internal files do.
 
+## GEO Audit — `cstatic geo`
+
+`cstatic geo` scans the built `output/` directory and scores Generative Engine Optimization (GEO) readiness 0–100, listing concrete remediation per check. It is **measurement only** — no behavior change to the build. Run it after `cstatic build`. It mirrors `cstatic check`: same colored-label output style, and it exits `1` when any hard issue fires (so it can gate CI).
+
+```bash
+cstatic geo    # audit output/, print scorecard, exit 1 on hard issues
+```
+
+No flags, no new config keys — the audit reads your existing GEO config (the same keys documented in the `[modules]`, `[seo]`, `[authors]`, `[sitemap_ai]`, and `[well_known]` sections above) and rescans every run.
+
+### The 9 checks
+
+| # | Check | Weight | What it verifies |
+|---|-------|--------|------------------|
+| 1 | `llms.txt` | 15 | When `modules.llms_txt` is on: `output/llms.txt` exists with non-trivial content. Missing → hard error. |
+| 2 | AI crawler allowlist | 15 | When `modules.robots_ai_crawlers_mode ≠ "off"`: `robots.txt` contains the expected AI-agent blocks (12 standard agents for `allow`/`disallow`; your custom list for `custom`). Missing file → hard error; partial → proportional credit with a warning per missing agent. |
+| 3 | JSON-LD valid | 30 | When `seo.json_ld_enabled` is on: every `<script type="application/ld+json">` block parses (minifier-tolerant), and each schema passes `seo_schema::validate()` for required fields. Unparseable JSON-LD → hard error; missing fields → warnings. |
+| 4 | Organization schema | 10 | When `seo.org_name` is set: re-runs `validate_organization()` and flags `name`/`logo`/`url` divergence across page-level Organization schemas. |
+| 5 | Author pages | 5 | When `authors.enabled` is on: each `<slug>.md` under `authors.dir` has a generated `/<authors_base>/<slug>/` page. |
+| 6 | Citation tags | 10 | When `seo.citation_tags_enabled` is on: article-typed pages (`BlogPosting`/`Article`/`NewsArticle`/`TechArticle`) carry both `citation_author` and `citation_title` meta tags. |
+| 7 | Passage index | 10 | When `seo.json_ld_enabled` is on: article pages have a non-empty `hasPart` array (from G8) in their page schema. |
+| 8 | `sitemap-ai.xml` | 5 | When `modules.sitemap_ai` is on: `output/sitemap-ai.xml` exists and contains `<urlset`. Missing → hard error. |
+| 9 | FAQ coverage | 0 | Informational only — counts pages with a `FAQPage` schema. No score impact. |
+
+### Scoring
+
+`score = round(sum(earned) / sum(max of non-skipped checks) * 100)`. Disabled checks show as `[--]` and contribute to neither the numerator nor the denominator. When no GEO features are enabled, the score is 0 and the report recommends enabling features. **Hard issues** (exit 1): missing `llms.txt` / `sitemap-ai.xml` / `robots.txt` when the corresponding feature is enabled, and unparseable JSON-LD. All other findings are warnings.
+

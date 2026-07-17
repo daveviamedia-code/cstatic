@@ -514,7 +514,7 @@ std::string markdown_mirror_suffix  = ".md";  // produces /posts/foo/index.md
 
 ## Tier 4 — Measurement
 
-### G17. `cstatic geo` Audit Subcommand
+### G17. `cstatic geo` Audit Subcommand   DONE
 
 **Approach**: New CLI subcommand mirroring `cstatic check`. Scans built output, scores GEO readiness, lists remediation. Exits non-zero on hard issues (missing llms.txt when enabled).
 

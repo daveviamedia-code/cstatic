@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(cstatic VERSION 0.19.0 LANGUAGES CXX)
+project(cstatic VERSION 0.20.0 LANGUAGES CXX)
 
 # Policy override for dependency compatibility (yaml-cpp requires older CMake minimum)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE INTERNAL "")
@@ -119,6 +119,7 @@ add_executable(cstatic
     src/template/renderer.cpp
     src/pipeline/builder.cpp
     src/pipeline/link_checker.cpp
+    src/pipeline/geo_audit.cpp
     src/utils/file_io.cpp
     src/utils/path.cpp
 )

@@ -180,6 +180,16 @@ struct Config {
     bool        wk_security_txt_enabled = false;
     std::string wk_security_txt_content;
 
+    // [analytics.ai_referrers] — opt-in <script> snippet that detects AI
+    // referrer domains (Perplexity, ChatGPT, Copilot, Gemini, Claude, etc.)
+    // in document.referrer or ?source=/utm_source= params and fires a
+    // provider-specific analytics event. Provider is one of "plausible",
+    // "umami", "ga4", or "custom" (the last requires ai_referrers_endpoint).
+    // Emits nothing by default; expose as {{ ai_referrer_snippet }} in layouts.
+    bool        analytics_ai_referrers_enabled = false;
+    std::string analytics_ai_referrers_provider;
+    std::string analytics_ai_referrers_endpoint;  // required when provider == "custom"
+
     // [hooks]
     std::string hook_before_build;
     std::string hook_after_build;

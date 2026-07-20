@@ -546,7 +546,7 @@ geo_cmd->callback([&]() { /* load config, run audit_geo, print report, exit */ }
 
 ---
 
-### G18. AI Referrer Tracking Snippets
+### G18. AI Referrer Tracking Snippets   DONE
 
 **Approach**: Template helper emitting JS that detects AI referrers (Perplexity, ChatGPT, Bing Copilot, Google AI Overviews via specific query params) and logs to configured analytics as custom events.
 

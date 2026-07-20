@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(cstatic VERSION 0.20.0 LANGUAGES CXX)
+project(cstatic VERSION 0.21.0 LANGUAGES CXX)
 
 # Policy override for dependency compatibility (yaml-cpp requires older CMake minimum)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE INTERNAL "")
@@ -113,6 +113,7 @@ add_executable(cstatic
     src/modules/search.cpp
     src/modules/og_images.cpp
     src/modules/well_known.cpp
+    src/modules/analytics.cpp
     src/server/dev_server.cpp
     src/server/file_watcher.cpp
     src/stb_impl.cpp

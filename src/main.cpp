@@ -240,6 +240,12 @@ robots = false
 # ai_plugin_enabled = false      # emit /.well-known/ai-plugin.json (OpenAI manifest)
 # security_txt_enabled = false   # emit /.well-known/security.txt (RFC 9116)
 
+# [analytics.ai_referrers]  # detect AI referrers (Perplexity, ChatGPT, ...) and
+# enabled = false            # fire a provider analytics event. Requires layouts
+# provider = "plausible"     # to reference {{ ai_referrer_snippet }}.
+# # provider ∈ "plausible" | "umami" | "ga4" | "custom"
+# # endpoint = "https://example.com/ingest"  # required when provider = "custom"
+
 [[collection]]
 name = "posts"
 template = "post"
@@ -291,6 +297,7 @@ This is the about page. Replace this content with your own.
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{ page.title }} — {{ site.title }}</title>
   {{ seo_meta }}
+  {{ ai_referrer_snippet }}
   <link rel="stylesheet" href="/css/style.css">
   <link rel="stylesheet" href="/css/highlight.css">
 </head>
@@ -365,6 +372,7 @@ Welcome to your blog! This is your first post. Edit or delete it, then run `csta
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{ page.title }} — {{ site.title }}</title>
   {{ seo_meta }}
+  {{ ai_referrer_snippet }}
   <link rel="stylesheet" href="/css/style.css">
   <link rel="stylesheet" href="/css/highlight.css">
 </head>

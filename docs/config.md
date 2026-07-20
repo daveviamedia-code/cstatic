@@ -1082,6 +1082,61 @@ supplies the full RFC 9116 text (`Contact:`, `Expires:`, etc.).
 
 ---
 
+## `[analytics.ai_referrers]` — AI Referrer Tracking Snippet (G18)
+
+Opt-in `<script>` snippet that detects AI referrer traffic and fires a
+provider-specific analytics event. Disabled by default — the snippet is
+exposed to layouts as `{{ ai_referrer_snippet }}`, which renders empty when
+the feature is off (always safe to leave in `<head>`).
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `enabled` | bool | `false` | Emit the AI referrer `<script>` snippet |
+| `provider` | string | `""` | `"plausible"`, `"umami"`, `"ga4"`, or `"custom"`. Required when enabled. |
+| `endpoint` | string | `""` | Required when `provider = "custom"`; POST target for the JSON payload |
+
+```toml
+[analytics.ai_referrers]
+enabled = true
+provider = "plausible"
+# provider = "custom"           # sends POST to endpoint instead
+# endpoint = "https://example.com/ingest"
+```
+
+Add `{{ ai_referrer_snippet }}` to your layout's `<head>` (the scaffolded
+`templates/default.html` and `templates/post.html` already include it). The
+snippet is computed once per build (it does not depend on per-page data),
+wrapped in a single `<script>` IIFE, and is **not** HTML-minified (same as
+JSON-LD).
+
+**Detection** (always emitted, shared across providers):
+
+1. Walks a hardcoded list of 9 AI referrer hostname patterns against
+   `document.referrer`'s hostname (case-insensitive substring match):
+   `perplexity.ai`, `chatgpt.com`, `copilot.microsoft.com`,
+   `gemini.google.com`, `claude.ai`, `you.com`, `poe.com`, `phind.com`,
+   `kagi.com`. First match wins and becomes the `source` value.
+2. If no referrer matches, scans `URLSearchParams` for `utm_source`, `source`,
+   `ref`, and `from` — values prefixed with an AI name (`perplexity`,
+   `chatgpt`, `copilot`, `gemini`, `claude`, `you.com`, `poe`, `phind`,
+   `kagi`) are detected and the prefix becomes the `source`.
+3. Bail out (`return`) when no AI signal is present — no event fires.
+
+**Dispatch** (one of four, chosen at build time):
+
+| Provider | Config value | JS call (guarded) |
+|----------|--------------|---------|
+| Plausible | `"plausible"` | `plausible("AI Referral", { props: { source } })` — fires only if `typeof window.plausible === "function"` (graceful no-op until Plausible's loader tag fires) |
+| Umami | `"umami"` | `umami.track("ai_referral", { source })` — guarded by `window.umami && typeof window.umami.track === "function"` |
+| GA4 | `"ga4"` | `gtag("event", "ai_referral", { source })` — guarded by `typeof window.gtag === "function"` |
+| Custom | `"custom"` | `fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event: "ai_referral", source, url, referrer }) })` — `endpoint` config required |
+
+**Failure modes** (all non-fatal; render an empty `{{ ai_referrer_snippet }}`):
+`enabled = false` (silent), empty `provider` (`warn:`), unknown `provider`
+(`warn:`), `provider = "custom"` without `endpoint` (`warn:`).
+
+---
+
 ## `[hooks]` — Build Hooks
 
 Run custom shell scripts before and/or after each build. Hooks receive environment variables with build context.

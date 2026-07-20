@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-07-20
+
+### Added
+- AI referrer tracking snippets (G18). Opt-in via `[analytics.ai_referrers]`: set `enabled = true`, pick a `provider` (`"plausible"`, `"umami"`, `"ga4"`, or `"custom"`), and the generator emits a small `<script>` block — exposed to layouts as `{{ ai_referrer_snippet }}` — that detects AI referrer traffic and fires a provider-specific analytics event. Detection runs against a hardcoded list of 9 AI referrer domains (`perplexity.ai`, `chatgpt.com`, `copilot.microsoft.com`, `gemini.google.com`, `claude.ai`, `you.com`, `poe.com`, `phind.com`, `kagi.com`) matched as substrings against `document.referrer`'s hostname, with a fallback to scanning `?utm_source=` / `?source=` / `?ref=` / `?from=` URL params for AI-name prefixes (`perplexity`, `chatgpt`, `copilot`, `gemini`, `claude`, …). When no AI signal is present the snippet no-ops. Dispatch is provider-specific and guarded by the corresponding global's presence: Plausible calls `plausible("AI Referral", { props: { source } })`, Umami calls `umami.track("ai_referral", { source })`, GA4 calls `gtag("event", "ai_referral", { source })`, and `custom` POSTs `{event, source, url, referrer}` as JSON to a user-supplied `endpoint` URL (required when `provider = "custom"`; without it the snippet is omitted with a warning). The snippet is wrapped in an IIFE, computed once per build (it doesn't depend on per-page data), and is not HTML-minified (same as JSON-LD). Defaults preserve existing output until enabled; the scaffold references `{{ ai_referrer_snippet }}` in `templates/default.html` and `templates/post.html` so enabling the flag is sufficient for the home page and blog posts. The four G18 failure modes (disabled, empty provider, unknown provider, `custom` without endpoint) all emit empty strings, so the template tag is always safe.
+
 ## [0.20.0] - 2026-07-17
 
 ### Added

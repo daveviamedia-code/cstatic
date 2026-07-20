@@ -23,6 +23,7 @@
 #include "modules/search.hpp"
 #include "modules/og_images.hpp"
 #include "modules/well_known.hpp"
+#include "modules/analytics.hpp"
 #include "template/renderer.hpp"
 #include "utils/path.hpp"
 #include "utils/terminal.hpp"
@@ -293,6 +294,7 @@ static void build_per_item_pages(
     const nlohmann::json& items,
     const nlohmann::json& site_ctx,
     const nlohmann::json& pages_array,
+    const std::string& ai_referrer_snippet,
     const TemplateRenderer& renderer,
     const std::string& output_dir,
     const std::string& data_file_key,
@@ -357,6 +359,7 @@ static void build_per_item_pages(
             }
             ctx["seo_meta"] = ctx["seo_meta"].get<std::string>() + extra;
         }
+        ctx["ai_referrer_snippet"] = ai_referrer_snippet;
 
         std::string html;
         try {
@@ -583,6 +586,12 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
                       << "': " << issue.message << "\n";
         }
     }
+
+    // G18: build the AI referrer <script> snippet once per build — it doesn't
+    // depend on per-page data. Copied into ctx["ai_referrer_snippet"] at every
+    // render site so layouts can opt in via {{ ai_referrer_snippet }}.
+    const std::string ai_referrer_snippet =
+        modules::build_ai_referrer_snippet(cfg);
 
     // Markdown rendering options (syntax highlighting + GFM extensions).
     MarkdownOptions md_opts;
@@ -1364,6 +1373,7 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
                     seo_meta += modules::seo_schema::build_json_ld(cfg, schema_page, pages_array);
                 }
                 ctx["seo_meta"] = seo_meta;
+                ctx["ai_referrer_snippet"] = ai_referrer_snippet;
 
                 std::string html;
                 std::string source_label = author_source_prefix + slug + ".md";
@@ -1644,6 +1654,7 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
                           + "\">\n";
             }
             ctx["seo_meta"] = seo_meta;
+            ctx["ai_referrer_snippet"] = ai_referrer_snippet;
 
             try {
                 rendered_html[ti] = renderer.render(rp.parsed.frontmatter.layout,
@@ -1791,6 +1802,7 @@ BuildResult build_site(const Config& cfg, bool full_rebuild, bool include_drafts
             }
             if (ds.per_item) {
                 build_per_item_pages(cfg, ds, items, site_ctx, pages_array,
+                                     ai_referrer_snippet,
                                      renderer, cfg.output_dir,
                                      data_file_path, tmpl_path,
                                      all_outputs, all_records,

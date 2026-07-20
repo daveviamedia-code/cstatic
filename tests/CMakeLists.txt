@@ -36,6 +36,7 @@ set(LIB_SOURCES
     ${CMAKE_SOURCE_DIR}/src/modules/search.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/og_images.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/well_known.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/analytics.cpp
     ${CMAKE_SOURCE_DIR}/src/server/file_watcher.cpp
     ${CMAKE_SOURCE_DIR}/src/stb_impl.cpp
     ${CMAKE_SOURCE_DIR}/src/template/renderer.cpp
@@ -75,6 +76,7 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/tests/test_authors_index.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_sitemap_ai.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_well_known.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_analytics.cpp
 )
 
 add_executable(cstatic_tests ${TEST_SOURCES} ${LIB_SOURCES})

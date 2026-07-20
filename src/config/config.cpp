@@ -331,6 +331,11 @@ Config load_config(const std::string& path, const std::string& env) {
     cfg.wk_security_txt_enabled     = optional_bool(tbl,   "well_known.security_txt_enabled", cfg.wk_security_txt_enabled);
     cfg.wk_security_txt_content     = optional_string(tbl, "well_known.security_txt_content", cfg.wk_security_txt_content);
 
+    // --- [analytics.ai_referrers] ---
+    cfg.analytics_ai_referrers_enabled  = optional_bool(tbl,   "analytics.ai_referrers.enabled", cfg.analytics_ai_referrers_enabled);
+    cfg.analytics_ai_referrers_provider = optional_string(tbl, "analytics.ai_referrers.provider", cfg.analytics_ai_referrers_provider);
+    cfg.analytics_ai_referrers_endpoint = optional_string(tbl, "analytics.ai_referrers.endpoint", cfg.analytics_ai_referrers_endpoint);
+
     // --- [hooks] ---
     cfg.hook_before_build = optional_string(tbl, "hooks.before_build", "");
     cfg.hook_after_build  = optional_string(tbl, "hooks.after_build", "");
@@ -502,6 +507,10 @@ std::string config_to_json(const Config& cfg) {
     j["well_known"]["ai_plugin_description"]    = cfg.wk_ai_plugin_description;
     j["well_known"]["security_txt_enabled"]     = cfg.wk_security_txt_enabled;
     j["well_known"]["security_txt_content"]     = cfg.wk_security_txt_content;
+
+    j["analytics"]["ai_referrers"]["enabled"]  = cfg.analytics_ai_referrers_enabled;
+    j["analytics"]["ai_referrers"]["provider"] = cfg.analytics_ai_referrers_provider;
+    j["analytics"]["ai_referrers"]["endpoint"] = cfg.analytics_ai_referrers_endpoint;
 
     j["hooks"]["before_build"] = cfg.hook_before_build;
     j["hooks"]["after_build"]  = cfg.hook_after_build;
